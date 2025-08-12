@@ -59,7 +59,7 @@
         </div>
         <div class="actions">
           <button class="ghost" id="btn-manage">Manage data</button>
-          <button class="btn" id="btn-pdf">Download A4 PDF</button>
+          <button class="btn" id="btn-pdf">Down A4 PDF</button>
           <button class="ghost" id="btn-share">Copy shareable link</button>
         </div>
       </div>
@@ -283,15 +283,22 @@
       params.set('show', $('#showAllModels').checked ? 'all' : 'stock');
       history.replaceState(null, '', `${location.pathname}?${params.toString()}`);
     }
-    function loadFromURL(){
-      const q = new URLSearchParams(location.search);
-      const set=(id,def)=>{if(q.has(id)) $(id).value=q.get(id); else $(id).value=def;};
-      set('tilesW',6); set('tilesH',4);
-      set('tileMmW',500); set('tileMmH',500);
-      set('tilePower',200); set('utilPct',40); set('brightPct',80); set('headroom',20);
-      set('redundancy','none');
-      $('#showAllModels').checked = q.get('show') === 'all';
-    }
+function loadFromURL(){
+  const q = new URLSearchParams(location.search);
+  const set = (id, def) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.value = q.has(id) ? q.get(id) : def;
+  };
+  set('tilesW',6); set('tilesH',4);
+  set('tileMmW',500); set('tileMmH',500);
+  set('tilePower',200); set('utilPct',40); set('brightPct',80); set('headroom',20);
+  set('redundancy','none');
+
+  const cb = document.getElementById('showAllModels');
+  if (cb) cb.checked = (q.get('show') === 'all');
+}
+
 
     const elTile=$('tile'), elW=$('tilesW'), elH=$('tilesH'), elTP=$('tilePower'), elHR=$('headroom'),
           elSpecs=$('specs'), elSenders=$('sender-body'), elReport=$('report'),
@@ -528,14 +535,31 @@
       } catch (err) { console.error(err); alert('PDF export failed. Use Print → Save as PDF as a fallback.'); }
     });
 
-    function wire(){
-      populateTiles(); loadFromURL();
-      ['input','change'].forEach(evt=> [document.getElementById('tile'), document.getElementById('tilesW'), document.getElementById('tilesH'), document.getElementById('tilePower'), document.getElementById('headroom'), document.getElementById('tileMmW'), document.getElementById('tileMmH'), document.getElementById('utilPct'), document.getElementById('brightPct'), document.getElementById('redundancy'), document.getElementById('showAllModels')].forEach(el=>el.addEventListener(evt, renderAll)));
-      document.querySelectorAll('[data-preset]').forEach(btn=>{
-        btn.addEventListener('click', ()=>{ const p=btn.getAttribute('data-preset'); if (p==='1080p') solveForTarget(1920,1080); if (p==='4k') solveForTarget(3840,2160); if (p==='16:9') closest169(); });
-      });
-      renderAll();
-    }
+function wire(){
+  populateTiles();
+  loadFromURL();
+
+  const ids = [
+    'tile','tilesW','tilesH','tilePower','headroom',
+    'tileMmW','tileMmH','utilPct','brightPct','redundancy','showAllModels'
+  ];
+  ids.map(id => document.getElementById(id))
+     .filter(Boolean)
+     .forEach(el => {
+       ['input','change'].forEach(evt => el.addEventListener(evt, renderAll));
+     });
+
+  document.querySelectorAll('[data-preset]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const p = btn.getAttribute('data-preset');
+      if (p==='1080p') solveForTarget(1920,1080);
+      if (p==='4k')    solveForTarget(3840,2160);
+      if (p==='16:9')  closest169();
+    });
+  });
+
+  renderAll();
+}
     wire();
   }
 })();
