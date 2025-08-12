@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>LED Screen Calculator — One-File (with Schematic)</title>
+<title>LED Screen Calculator — One-File (240V, mm size, schematic, quote)</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <style>
@@ -19,6 +19,7 @@
   label{font-size:12px;color:var(--muted);display:block;margin-bottom:6px}
   input,select,button,textarea{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#0b1a2e;color:#e2e8f0}
   input[type="checkbox"]{width:auto}
+  textarea{min-height:120px;resize:vertical}
   button.btn{background:var(--accent);border-color:transparent;color:#051325;cursor:pointer;font-weight:600}
   button.ghost{background:transparent;border-color:var(--line);color:#e2e8f0}
   .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -53,7 +54,7 @@
     <div class="center" style="margin-bottom:12px">
       <div>
         <h1>LED Screen Calculator — Pro</h1>
-        <div class="muted">Pixels → smallest sender • power • dimensions • presets • editable inventory • schematic • PDF • share URL</div>
+        <div class="muted">Pixels → smallest sender • 240V power + 10A circuits • dimensions (mm) • presets • editable inventory • schematic • PDF • share URL</div>
       </div>
       <div class="actions">
         <button class="ghost" id="btn-manage">Manage data</button>
@@ -72,19 +73,8 @@
               <select id="tile"></select>
             </div>
             <div>
-              <label>Tile size (mm) — W × H</label>
-              <div class="row"><input id="tileMmW" type="number" min="1" value="500"/><input id="tileMmH" type="number" min="1" value="500"/></div>
-            </div>
-          </div>
-
-          <div class="row" style="margin-top:10px">
-            <div>
-              <label>Tiles (W)</label>
-              <input id="tilesW" type="number" min="1" value="6" />
-            </div>
-            <div>
-              <label>Tiles (H)</label>
-              <input id="tilesH" type="number" min="1" value="4" />
+              <label>Tiles (W × H)</label>
+              <div class="row"><input id="tilesW" type="number" min="1" value="6" /><input id="tilesH" type="number" min="1" value="4" /></div>
             </div>
           </div>
 
@@ -134,6 +124,17 @@
           <div class="hd"><strong>Calculated Specs</strong></div>
           <div class="bd">
             <div class="grid" style="grid-template-columns:repeat(3,minmax(0,1fr));gap:10px" id="specs"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="hd"><strong>Quote Description</strong></div>
+          <div class="bd">
+            <div class="inline" style="justify-content:space-between;margin-bottom:8px">
+              <span class="muted">Copy/paste this into WhipIt</span>
+              <button class="ghost" id="copyQuote">Copy</button>
+            </div>
+            <textarea id="quoteBox" placeholder="Quote text will appear here..."></textarea>
           </div>
         </div>
 
@@ -246,14 +247,13 @@
 
     // ---------- Storage helpers (safe) ----------
     function safeParse(key, fallback){ try{ const v = JSON.parse(localStorage.getItem(key) || 'null'); return v ?? fallback; } catch { return fallback; } }
-    let NOVASTAR_SENDERS = safeParse('senders_v3', DEFAULT_SENDERS.slice());
-    let LED_TILES       = safeParse('tiles_v3',   DEFAULT_TILES.slice());
-    const save = () => { localStorage.setItem('senders_v3', JSON.stringify(NOVASTAR_SENDERS)); localStorage.setItem('tiles_v3', JSON.stringify(LED_TILES)); };
+    let NOVASTAR_SENDERS = safeParse('senders_v4', DEFAULT_SENDERS.slice());
+    let LED_TILES       = safeParse('tiles_v4',   DEFAULT_TILES.slice());
+    const save = () => { localStorage.setItem('senders_v4', JSON.stringify(NOVASTAR_SENDERS)); localStorage.setItem('tiles_v4', JSON.stringify(LED_TILES)); };
 
     // ---------- Utilities ----------
     const $ = (id)=>document.getElementById(id);
     const round=(n,dp=0)=>{const f=Math.pow(10,dp);return Math.round((n+Number.EPSILON)*f)/f;};
-    const mmToM=(mm)=>mm/1000, mmToIn=(mm)=>mm/25.4;
 
     function visibleSenders(){ return ($('#showAllModels')?.checked ? NOVASTAR_SENDERS : NOVASTAR_SENDERS.filter(s => (s.qty||0) > 0)); }
 
@@ -283,6 +283,9 @@
       const sel=$('tile'); sel.innerHTML='';
       LED_TILES.forEach(t=>{const o=document.createElement('option');o.value=t.id;o.textContent=`${t.name||t.brand} — ${t.pitchMm}mm (${t.pxW}×${t.pxH})`;sel.appendChild(o);});
       if (!sel.value && LED_TILES[0]) sel.value=LED_TILES[0].id;
+      // default tile power to the selected tile's spec
+      const tile = LED_TILES.find(t=>t.id===sel.value)||LED_TILES[0];
+      if (tile) { $('tilePower').value = tile.maxPowerW || 200; }
     }
 
     // ---------- Schematic (SVG) ----------
@@ -346,31 +349,41 @@
     function renderAll(){
       const tile=LED_TILES.find(t=>t.id===$('tile').value)||LED_TILES[0];
       const tilesW=+$('tilesW').value||0, tilesH=+$('tilesH').value||0;
-      const pxW=tile.pxW*tilesW, pxH=tile.pxH*tilesH, totalPx=pxW*pxH;
-      const mmW=(+$('tileMmW').value||tile.mmW||500)*tilesW, mmH=(+$('tileMmH').value||tile.mmH||500)*tilesH;
-      const mW=mmToM(mmW), mH=mmToM(mmH), inW=mmToIn(mmW), inH=mmToIn(mmH);
-      const diagIn=Math.sqrt(inW*inW+inH*inH), ppi=Math.sqrt(pxW*pxW+pxH*pxH)/Math.max(1,diagIn), aspect=`${round(pxW/Math.max(1,pxH),2)}:1`;
-      const tileCount=tilesW*tilesH, tilePower=+$('tilePower').value||0, util=(+$('utilPct').value||40)/100, bright=(+$('brightPct').value||80)/100, headroom=(+$('headroom').value||20)/100;
-      const powerAvgW=tileCount*tilePower*util*bright, powerWithHeadroomW=powerAvgW*(1+headroom), amps230=powerWithHeadroomW/230, amps110=powerWithHeadroomW/110;
 
+      // Pixels
+      const pxW=tile.pxW*tilesW, pxH=tile.pxH*tilesH, totalPx=pxW*pxH;
+
+      // Physical size — based strictly on the selected tile's mm size
+      const mmW=(tile.mmW||500)*tilesW, mmH=(tile.mmH||500)*tilesH;
+
+      // Power @240V
+      const MAINS_V = 240;
+      const tileCount=tilesW*tilesH, tilePower=+$('tilePower').value||tile.maxPowerW||200;
+      const util=(+$('utilPct').value||40)/100, bright=(+$('brightPct').value||80)/100, headroom=(+$('headroom').value||20)/100;
+      const powerAvgW=tileCount*tilePower*util*bright;
+      const powerWithHeadroomW=powerAvgW*(1+headroom);
+      const amps240=powerWithHeadroomW/MAINS_V;
+      const circuits10A=Math.ceil(amps240/10);
+
+      // Sender ranking
       const ranked=rankSenders(totalPx,pxW,pxH), best=chooseBest(totalPx,pxW,pxH);
       const portsUsed = Math.max(1, best ? best.portsNeeded : 1);
 
+      // Specs
       const specs=$('specs'); specs.innerHTML='';
       const spec=(l,v,cls='')=>{const d=document.createElement('div');d.className='spec';d.innerHTML=`<div class="l">${l}</div><div class="v ${cls}">${v}</div>`;specs.appendChild(d);}
       spec('Tile', `${tile.name||tile.brand} ${tile.pitchMm}mm (${tile.pxW}×${tile.pxH})`);
       spec('Array (tiles)', `${tilesW} × ${tilesH}`);
+      spec('Physical size (mm)', `${Math.round(mmW)} × ${Math.round(mmH)} mm`);
       spec('Screen res', `${pxW} × ${pxH}`);
       spec('Pixels total', totalPx.toLocaleString());
-      spec('Physical size', `${round(mW,3)} m × ${round(mH,3)} m`);
-      spec('Diagonal', `${round(diagIn,1)} in (${round(ppi,1)} ppi)`);
-      spec('Power avg', `${round(powerAvgW)} W`);
-      spec(`Power +${round(headroom*100)}%`, `${round(powerWithHeadroomW)} W`);
-      spec('Amps @230V', `${round(amps230,2)} A`);
-      spec('Amps @110V', `${round(amps110,2)} A`);
-      spec('Aspect', `${aspect}`);
+      spec('Power avg', `${Math.round(powerAvgW)} W`);
+      spec(`Power +${Math.round(headroom*100)}%`, `${Math.round(powerWithHeadroomW)} W`);
+      spec('Current @240V', `${round(amps240,2)} A`);
+      spec('10A circuits (min)', `${circuits10A}`);
       spec('Recommended sender', best ? `${best.model} • Ports ${best?.portsNeeded||'?'} / ${best.ports}` : 'None in visible list', best?'ok':'danger');
 
+      // Sender table
       const tb=$('sender-body'); tb.innerHTML = ranked.length?'':'<tr><td colspan="8" class="danger">No sender fits. Adjust spec or show all models.</td></tr>';
       ranked.forEach(s=>{
         const units = s.fits ? 1 : Math.ceil(s.portsNeeded/Math.max(1,s.ports));
@@ -379,7 +392,7 @@
         tb.appendChild(tr);
       });
 
-      // Report block (for PDF) = summary chips + schematic SVG
+      // Report block + schematic
       $('report').innerHTML = `
         <div class="center" style="padding:8px 10px">
           <div><strong>Screen Summary</strong></div>
@@ -387,13 +400,24 @@
             <div class="chip">${tile.name || tile.brand} • ${tile.pitchMm}mm</div>
             <div class="chip">${tilesW}×${tilesH} tiles</div>
             <div class="chip">${pxW}×${pxH}px</div>
-            <div class="chip">${round(mW,2)}m × ${round(mH,2)}m</div>
-            <div class="chip">Power (avg + headroom): ${round(powerWithHeadroomW)} W</div>
+            <div class="chip">${Math.round(mmW)}mm × ${Math.round(mmH)}mm</div>
+            <div class="chip">240V: ~${round(amps240,2)} A → ${circuits10A} × 10A circuits</div>
             <div class="chip">Sender: ${best ? best.model : '—'} (${portsUsed} port${portsUsed>1?'s':''})</div>
           </div>
         </div>
         ${drawSchematic(tilesW, tilesH, portsUsed)}
       `;
+
+      // Quote Description
+      const quote = [
+        `${tilesW}×${tilesH} ${tile.name} LED wall (${tile.pitchMm}mm, ${tile.pxW}×${tile.pxH}px per tile)`,
+        `Overall resolution: ${pxW}×${pxH}px`,
+        `Physical size: ${Math.round(mmW)}×${Math.round(mmH)} mm`,
+        `Power (avg + headroom): ~${Math.round(powerWithHeadroomW)} W @240V`,
+        `Estimated current: ~${round(amps240,2)} A → ${circuits10A} × 10A circuits`,
+        `Recommended sender: ${best ? best.model : 'TBC'} (${portsUsed} port${portsUsed>1?'s':''})`
+      ].join(' • ');
+      const qb = document.getElementById('quoteBox'); if (qb) qb.value = quote;
 
       save();
     }
@@ -461,9 +485,15 @@
       populateTiles();
 
       // Inputs
-      const ids=['tile','tilesW','tilesH','tilePower','headroom','tileMmW','tileMmH','utilPct','brightPct','redundancy','showAllModels'];
+      const ids=['tile','tilesW','tilesH','tilePower','headroom','utilPct','brightPct','redundancy','showAllModels'];
       ids.map(id=>$(id)).filter(Boolean).forEach(el=>{
         ['input','change'].forEach(evt=>el.addEventListener(evt, renderAll));
+      });
+
+      // When tile changes, sync default tilePower to that tile
+      $('tile').addEventListener('change', ()=>{
+        const t = LED_TILES.find(x=>x.id===$('tile').value)||LED_TILES[0];
+        if (t && t.maxPowerW) $('tilePower').value = t.maxPowerW;
       });
 
       // Presets
@@ -533,8 +563,13 @@
       $('importSenders').addEventListener('change', e=> importJSON(e, data=>{ NOVASTAR_SENDERS=data; save(); refreshTables(); renderAll(); }));
       $('importTiles').addEventListener('change',   e=> importJSON(e, data=>{ LED_TILES=data; save(); refreshTables(); populateTiles(); renderAll(); }));
 
-      // Share
+      // Share & Quote Copy
       $('btn-share').addEventListener('click', ()=>{ navigator.clipboard.writeText(location.href).then(()=>alert('Link copied')); });
+      $('copyQuote').addEventListener('click', ()=>{
+        const t = $('quoteBox'); if (!t) return;
+        t.select(); t.setSelectionRange(0, 99999);
+        navigator.clipboard.writeText(t.value).then(()=>{ alert('Quote text copied'); });
+      });
 
       // Cross-browser PDF export (PNG + blob fallback + print fallback)
       $('btn-pdf').addEventListener('click', async () => {
