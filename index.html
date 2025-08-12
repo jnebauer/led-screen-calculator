@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>LED Screen Calculator — One-File (240V, mm size, schematic, quote)</title>
+<title>LED Screen Calculator — 240V • Redundancy • Circuits • Quote • Schematic Toggle</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="preconnect" href="https://cdn.jsdelivr.net">
 <style>
@@ -19,7 +19,7 @@
   label{font-size:12px;color:var(--muted);display:block;margin-bottom:6px}
   input,select,button,textarea{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#0b1a2e;color:#e2e8f0}
   input[type="checkbox"]{width:auto}
-  textarea{min-height:120px;resize:vertical}
+  textarea{min-height:140px;resize:vertical}
   button.btn{background:var(--accent);border-color:transparent;color:#051325;cursor:pointer;font-weight:600}
   button.ghost{background:transparent;border-color:var(--line);color:#e2e8f0}
   .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
@@ -54,7 +54,7 @@
     <div class="center" style="margin-bottom:12px">
       <div>
         <h1>LED Screen Calculator — Pro</h1>
-        <div class="muted">Pixels → smallest sender • 240V power + 10A circuits • dimensions (mm) • presets • editable inventory • schematic • PDF • share URL</div>
+        <div class="muted">Pixels → smallest sender • Redundancy • 240V power • 10A circuits • tile rule (≤15 tiles) • schematic • PDF • quote</div>
       </div>
       <div class="actions">
         <button class="ghost" id="btn-manage">Manage data</button>
@@ -83,24 +83,21 @@
               <label>Tile max power (W)</label>
               <input id="tilePower" type="number" min="1" value="200" />
             </div>
-            <div>
-              <label>Utilisation (% of max) • brightness factor</label>
-              <div class="row"><input id="utilPct" type="number" min="1" max="100" value="40"/><input id="brightPct" type="number" min="1" max="100" value="80"/></div>
+            <div class="inline" style="gap:10px;margin-top:26px">
+              <input type="checkbox" id="redundancy"/>
+              <label for="redundancy" style="margin:0">Enable redundancy (dual feed)</label>
             </div>
           </div>
 
           <div class="row" style="margin-top:10px">
             <div>
-              <label>Headroom (%)</label>
-              <input id="headroom" type="number" min="0" value="20" />
-            </div>
-            <div>
-              <label>Redundancy</label>
-              <select id="redundancy">
-                <option value="none">None</option>
-                <option value="dual">Dual backup (primary + backup)</option>
+              <label>Schematic split</label>
+              <select id="splitMode">
+                <option value="columns" selected>By columns (vertical bands)</option>
+                <option value="rows">By rows (horizontal bands)</option>
               </select>
             </div>
+            <div></div>
           </div>
 
           <div style="margin-top:10px">
@@ -128,10 +125,10 @@
         </div>
 
         <div class="card">
-          <div class="hd"><strong>Quote Description</strong></div>
+          <div class="hd"><strong>WhipIt Quote Description</strong></div>
           <div class="bd">
             <div class="inline" style="justify-content:space-between;margin-bottom:8px">
-              <span class="muted">Copy/paste this into WhipIt</span>
+              <span class="muted">Title + dot points (copy into WhipIt)</span>
               <button class="ghost" id="copyQuote">Copy</button>
             </div>
             <textarea id="quoteBox" placeholder="Quote text will appear here..."></textarea>
@@ -245,11 +242,11 @@
       { id: "led-arts-3.9", name: "LED Arts 3.9", brand: "LED Arts", pitchMm: 3.9, pxW: 128, pxH: 128, mmW: 500, mmH: 500, maxPowerW: 200 }
     ];
 
-    // ---------- Storage helpers (safe) ----------
+    // ---------- Storage helpers ----------
     function safeParse(key, fallback){ try{ const v = JSON.parse(localStorage.getItem(key) || 'null'); return v ?? fallback; } catch { return fallback; } }
-    let NOVASTAR_SENDERS = safeParse('senders_v4', DEFAULT_SENDERS.slice());
-    let LED_TILES       = safeParse('tiles_v4',   DEFAULT_TILES.slice());
-    const save = () => { localStorage.setItem('senders_v4', JSON.stringify(NOVASTAR_SENDERS)); localStorage.setItem('tiles_v4', JSON.stringify(LED_TILES)); };
+    let NOVASTAR_SENDERS = safeParse('senders_v6', DEFAULT_SENDERS.slice());
+    let LED_TILES       = safeParse('tiles_v6',   DEFAULT_TILES.slice());
+    const save = () => { localStorage.setItem('senders_v6', JSON.stringify(NOVASTAR_SENDERS)); localStorage.setItem('tiles_v6', JSON.stringify(LED_TILES)); };
 
     // ---------- Utilities ----------
     const $ = (id)=>document.getElementById(id);
@@ -257,39 +254,41 @@
 
     function visibleSenders(){ return ($('#showAllModels')?.checked ? NOVASTAR_SENDERS : NOVASTAR_SENDERS.filter(s => (s.qty||0) > 0)); }
 
-    function rankSenders(totalPx, wPx, hPx){
+    // Redundancy-aware ranking: requiredPorts = portsNeeded * (redundancy?2:1)
+    function rankSenders(totalPx, wPx, hPx, redundancy){
       return visibleSenders().map(s=>{
         const perPort=Math.max(1,s.perPortPxLimit);
-        const portsNeeded=Math.ceil(totalPx/perPort);
+        const basePortsNeeded=Math.ceil(totalPx/perPort);
+        const requiredPorts = redundancy ? basePortsNeeded*2 : basePortsNeeded;
         const fitsTotal=totalPx<=s.totalPxLimit;
         const fitsDims=wPx<=s.maxW && hPx<=s.maxH;
-        const fitsPorts=portsNeeded<=s.ports;
+        const fitsPorts=requiredPorts<=s.ports;
         const fits=fitsTotal&&fitsDims&&fitsPorts;
-        const unitsNeeded=fits?1:Math.ceil(portsNeeded/Math.max(1,s.ports));
-        return {...s,fits,portsNeeded,unitsNeeded};
+        const unitsNeeded=fits?1:Math.ceil(requiredPorts/Math.max(1,s.ports));
+        return {...s,fits,portsNeeded:basePortsNeeded,requiredPorts,unitsNeeded};
       }).filter(s=>s.fits || s.unitsNeeded>1)
         .sort((a,b)=>{
           if ((a.fits?0:1)!==(b.fits?0:1)) return (a.fits?0:1)-(b.fits?0:1);
           if ((b.preferred?1:0)!==(a.preferred?1:0)) return (b.preferred?1:0)-(a.preferred?1:0);
           if (a.totalPxLimit!==b.totalPxLimit) return a.totalPxLimit-b.totalPxLimit;
-          if (a.portsNeeded!==b.portsNeeded)   return a.portsNeeded-b.portsNeeded;
+          if (a.requiredPorts!==b.requiredPorts) return a.requiredPorts-b.requiredPorts;
           if (a.ports!==b.ports)               return a.ports-b.ports;
           return 0;
         });
     }
-    const chooseBest=(px, w, h)=> rankSenders(px,w,h).find(r=>r.fits)||null;
+    const chooseBest=(px, w, h, redundancy)=> rankSenders(px,w,h, redundancy).find(r=>r.fits)||null;
 
     function populateTiles(){
       const sel=$('tile'); sel.innerHTML='';
       LED_TILES.forEach(t=>{const o=document.createElement('option');o.value=t.id;o.textContent=`${t.name||t.brand} — ${t.pitchMm}mm (${t.pxW}×${t.pxH})`;sel.appendChild(o);});
       if (!sel.value && LED_TILES[0]) sel.value=LED_TILES[0].id;
-      // default tile power to the selected tile's spec
       const tile = LED_TILES.find(t=>t.id===sel.value)||LED_TILES[0];
       if (tile) { $('tilePower').value = tile.maxPowerW || 200; }
     }
 
     // ---------- Schematic (SVG) ----------
-    function drawSchematic(cols, rows, chains) {
+    // splitMode: 'columns' (vertical bands) or 'rows' (horizontal bands)
+    function drawSchematic(cols, rows, chains, splitMode='columns') {
       const cell = 36, pad = 24;
       const w = cols * cell + pad * 2;
       const h = rows * cell + pad * 2;
@@ -310,36 +309,70 @@
         const y = pad + r * cell; segs.push(`<path d="M ${pad} ${y} H ${w - pad}" stroke="#1f2e46" stroke-width="1"/>`);
       }
 
-      const bands = Math.max(1, Math.min(chains, cols));
-      const colsPer = Math.ceil(cols / bands);
-
-      for (let i = 0; i < bands; i++) {
-        const colStart = i * colsPer;
-        const colEnd   = Math.min(cols, (i + 1) * colsPer) - 1;
-        if (colStart > colEnd) continue;
-        const color = palette[i % palette.length];
-        const pts = [];
-        for (let r = 0; r < rows; r++) {
-          const y = pad + r * cell + cell / 2;
-          const leftX  = pad + colStart * cell + cell / 2;
-          const rightX = pad + colEnd   * cell + cell / 2;
-          const goLR = (r % 2 === 0);
-          if (goLR) { pts.push([leftX, y]); pts.push([rightX, y]); }
-          else      { pts.push([rightX, y]); pts.push([leftX,  y]); }
+      if (splitMode === 'rows') {
+        // horizontal bands; serpentine vertically within each band by columns
+        const bands = Math.max(1, Math.min(chains, rows));
+        const rowsPer = Math.ceil(rows / bands);
+        for (let i = 0; i < bands; i++) {
+          const rowStart = i * rowsPer;
+          const rowEnd   = Math.min(rows, (i + 1) * rowsPer) - 1;
+          if (rowStart > rowEnd) continue;
+          const color = palette[i % palette.length];
+          const pts = [];
+          for (let c = 0; c < cols; c++) {
+            const x = pad + c * cell + cell / 2;
+            const topY    = pad + rowStart * cell + cell / 2;
+            const bottomY = pad + rowEnd   * cell + cell / 2;
+            const goTB = (c % 2 === 0); // alternate down/up per column
+            if (goTB) { pts.push([x, topY]); pts.push([x, bottomY]); }
+            else      { pts.push([x, bottomY]); pts.push([x, topY]); }
+          }
+          for (let k = 0; k < pts.length - 1; k++) {
+            const [x1, y1] = pts[k], [x2, y2] = pts[k+1];
+            segs.push(`<path d="M ${x1} ${y1} L ${x2} ${y2}" stroke="${color}" stroke-width="3" fill="none" style="color:${color}" marker-end="url(#arrow)"/>`);
+          }
+          const start = pts[0], end = pts[pts.length-1];
+          segs.push(`<circle cx="${start[0]}" cy="${start[1]}" r="7" fill="${color}" opacity="0.9"/>`);
+          segs.push(`<text x="${start[0]}" y="${start[1]+4}" font-size="9" text-anchor="middle" fill="#041225" font-weight="700">S</text>`);
+          segs.push(`<circle cx="${end[0]}" cy="${end[1]}" r="7" fill="${color}" opacity="0.9"/>`);
+          segs.push(`<text x="${end[0]}" y="${end[1]+4}" font-size="9" text-anchor="middle" fill="#041225" font-weight="700">E</text>`);
+          const by = pad + rowStart * cell, bh = (rowEnd - rowStart + 1) * cell;
+          segs.push(`<rect x="${pad}" y="${by}" width="${cols * cell}" height="${bh}" fill="none" stroke="${color}" stroke-opacity="0.25" stroke-dasharray="6 4" rx="6"/>`);
+          segs.push(`<text x="${pad + 6}" y="${by + 12}" font-size="10" fill="${color}" font-weight="600">Port ${i+1}</text>`);
         }
-        for (let k = 0; k < pts.length - 1; k++) {
-          const [x1, y1] = pts[k], [x2, y2] = pts[k+1];
-          segs.push(`<path d="M ${x1} ${y1} L ${x2} ${y2}" stroke="${color}" stroke-width="3" fill="none" style="color:${color}" marker-end="url(#arrow)"/>`);
+      } else {
+        // columns (vertical bands); serpentine horizontally per row
+        const bands = Math.max(1, Math.min(chains, cols));
+        const colsPer = Math.ceil(cols / bands);
+        for (let i = 0; i < bands; i++) {
+          const colStart = i * colsPer;
+          const colEnd   = Math.min(cols, (i + 1) * colsPer) - 1;
+          if (colStart > colEnd) continue;
+          const color = palette[i % palette.length];
+          const pts = [];
+          for (let r = 0; r < rows; r++) {
+            const y = pad + r * cell + cell / 2;
+            const leftX  = pad + colStart * cell + cell / 2;
+            const rightX = pad + colEnd   * cell + cell / 2;
+            const goLR = (r % 2 === 0);
+            if (goLR) { pts.push([leftX, y]); pts.push([rightX, y]); }
+            else      { pts.push([rightX, y]); pts.push([leftX,  y]); }
+          }
+          for (let k = 0; k < pts.length - 1; k++) {
+            const [x1, y1] = pts[k], [x2, y2] = pts[k+1];
+            segs.push(`<path d="M ${x1} ${y1} L ${x2} ${y2}" stroke="${color}" stroke-width="3" fill="none" style="color:${color}" marker-end="url(#arrow)"/>`);
+          }
+          const start = pts[0], end = pts[pts.length-1];
+          segs.push(`<circle cx="${start[0]}" cy="${start[1]}" r="7" fill="${color}" opacity="0.9"/>`);
+          segs.push(`<text x="${start[0]}" y="${start[1]+4}" font-size="9" text-anchor="middle" fill="#041225" font-weight="700">S</text>`);
+          segs.push(`<circle cx="${end[0]}" cy="${end[1]}" r="7" fill="${color}" opacity="0.9"/>`);
+          segs.push(`<text x="${end[0]}" y="${end[1]+4}" font-size="9" text-anchor="middle" fill="#041225" font-weight="700">E</text>`);
+          const bx = pad + colStart * cell, bw = (colEnd - colStart + 1) * cell;
+          segs.push(`<rect x="${bx}" y="${pad}" width="${bw}" height="${rows * cell}" fill="none" stroke="${color}" stroke-opacity="0.25" stroke-dasharray="6 4" rx="6"/>`);
+          segs.push(`<text x="${bx + 4}" y="${pad + 12}" font-size="10" fill="${color}" font-weight="600">Port ${i+1}</text>`);
         }
-        const start = pts[0], end = pts[pts.length-1];
-        segs.push(`<circle cx="${start[0]}" cy="${start[1]}" r="7" fill="${color}" opacity="0.9"/>`);
-        segs.push(`<text x="${start[0]}" y="${start[1]+4}" font-size="9" text-anchor="middle" fill="#041225" font-weight="700">S</text>`);
-        segs.push(`<circle cx="${end[0]}" cy="${end[1]}" r="7" fill="${color}" opacity="0.9"/>`);
-        segs.push(`<text x="${end[0]}" y="${end[1]+4}" font-size="9" text-anchor="middle" fill="#041225" font-weight="700">E</text>`);
-        const bx = pad + colStart * cell, bw = (colEnd - colStart + 1) * cell;
-        segs.push(`<rect x="${bx}" y="${pad}" width="${bw}" height="${rows * cell}" fill="none" stroke="${color}" stroke-opacity="0.25" stroke-dasharray="6 4" rx="6"/>`);
-        segs.push(`<text x="${bx + 4}" y="${pad + 12}" font-size="10" fill="${color}" font-weight="600">Port ${i+1}</text>`);
       }
+
       const legendY = h - pad + 18;
       segs.push(`<text x="${pad}" y="${legendY}" font-size="11" fill="#9fb4d9">Legend: Port bands (color) · S = Start · E = End · Arrows = flow</text>`);
       return `<svg viewBox="0 0 ${w} ${h}" width="100%" height="260" xmlns="http://www.w3.org/2000/svg">${segs.join('')}</svg>`;
@@ -349,25 +382,32 @@
     function renderAll(){
       const tile=LED_TILES.find(t=>t.id===$('tile').value)||LED_TILES[0];
       const tilesW=+$('tilesW').value||0, tilesH=+$('tilesH').value||0;
+      const redundancy = $('redundancy').checked;
+      const splitMode = $('splitMode').value || 'columns';
 
       // Pixels
       const pxW=tile.pxW*tilesW, pxH=tile.pxH*tilesH, totalPx=pxW*pxH;
 
-      // Physical size — based strictly on the selected tile's mm size
+      // Physical size — strictly from selected tile mm size
       const mmW=(tile.mmW||500)*tilesW, mmH=(tile.mmH||500)*tilesH;
 
-      // Power @240V
+      // Power @240V (max load)
       const MAINS_V = 240;
       const tileCount=tilesW*tilesH, tilePower=+$('tilePower').value||tile.maxPowerW||200;
-      const util=(+$('utilPct').value||40)/100, bright=(+$('brightPct').value||80)/100, headroom=(+$('headroom').value||20)/100;
-      const powerAvgW=tileCount*tilePower*util*bright;
-      const powerWithHeadroomW=powerAvgW*(1+headroom);
-      const amps240=powerWithHeadroomW/MAINS_V;
-      const circuits10A=Math.ceil(amps240/10);
+      const powerW=tileCount*tilePower;
+      const amps240=powerW/MAINS_V;
 
-      // Sender ranking
-      const ranked=rankSenders(totalPx,pxW,pxH), best=chooseBest(totalPx,pxW,pxH);
-      const portsUsed = Math.max(1, best ? best.portsNeeded : 1);
+      // Circuits
+      const circuitsByPower = Math.ceil(amps240/10);  // 10A circuits by current
+      const TILES_PER_CIRCUIT_RULE = 15;
+      const circuitsByTiles = Math.ceil(tileCount / TILES_PER_CIRCUIT_RULE);
+      const circuitsRecommended = Math.max(circuitsByPower, circuitsByTiles);
+
+      // Sender ranking (redundancy-aware)
+      const ranked=rankSenders(totalPx,pxW,pxH, redundancy);
+      const best=chooseBest(totalPx,pxW,pxH, redundancy);
+      const portsUsedBase = Math.max(1, best ? best.portsNeeded : 1);
+      const portsUsed = redundancy ? portsUsedBase*2 : portsUsedBase;
 
       // Specs
       const specs=$('specs'); specs.innerHTML='';
@@ -377,18 +417,21 @@
       spec('Physical size (mm)', `${Math.round(mmW)} × ${Math.round(mmH)} mm`);
       spec('Screen res', `${pxW} × ${pxH}`);
       spec('Pixels total', totalPx.toLocaleString());
-      spec('Power avg', `${Math.round(powerAvgW)} W`);
-      spec(`Power +${Math.round(headroom*100)}%`, `${Math.round(powerWithHeadroomW)} W`);
+      spec('Power @240V (max)', `${Math.round(powerW)} W`);
       spec('Current @240V', `${round(amps240,2)} A`);
-      spec('10A circuits (min)', `${circuits10A}`);
-      spec('Recommended sender', best ? `${best.model} • Ports ${best?.portsNeeded||'?'} / ${best.ports}` : 'None in visible list', best?'ok':'danger');
+      spec('Tiles / 10A circuit (rule)', `≤ ${TILES_PER_CIRCUIT_RULE}`);
+      spec('Circuits by power (10A)', `${circuitsByPower}`);
+      spec('Circuits by tiles (10A)', `${circuitsByTiles}`);
+      spec('10A circuits (recommended)', `${circuitsRecommended}`, 'ok');
+      spec('Redundancy', redundancy ? 'Enabled (dual feed)' : 'Disabled');
+      spec('Recommended sender', best ? `${best.model} • Ports ${portsUsed} / ${best.ports}` : 'None in visible list', best?'ok':'danger');
 
       // Sender table
       const tb=$('sender-body'); tb.innerHTML = ranked.length?'':'<tr><td colspan="8" class="danger">No sender fits. Adjust spec or show all models.</td></tr>';
       ranked.forEach(s=>{
-        const units = s.fits ? 1 : Math.ceil(s.portsNeeded/Math.max(1,s.ports));
+        const units = s.fits ? 1 : Math.ceil(s.requiredPorts/Math.max(1,s.ports));
         const tr=document.createElement('tr');
-        tr.innerHTML=`<td>${s.model}</td><td>${s.qty??''}</td><td>${s.ports}</td><td>${s.perPortPxLimit.toLocaleString()}</td><td>${s.totalPxLimit.toLocaleString()}</td><td>${s.portsNeeded} / ${s.ports}</td><td>${s.maxW} × ${s.maxH}</td><td>${units}</td>`;
+        tr.innerHTML=`<td>${s.model}</td><td>${s.qty??''}</td><td>${s.ports}</td><td>${s.perPortPxLimit.toLocaleString()}</td><td>${s.totalPxLimit.toLocaleString()}</td><td>${s.requiredPorts} / ${s.ports}</td><td>${s.maxW} × ${s.maxH}</td><td>${units}</td>`;
         tb.appendChild(tr);
       });
 
@@ -401,23 +444,24 @@
             <div class="chip">${tilesW}×${tilesH} tiles</div>
             <div class="chip">${pxW}×${pxH}px</div>
             <div class="chip">${Math.round(mmW)}mm × ${Math.round(mmH)}mm</div>
-            <div class="chip">240V: ~${round(amps240,2)} A → ${circuits10A} × 10A circuits</div>
-            <div class="chip">Sender: ${best ? best.model : '—'} (${portsUsed} port${portsUsed>1?'s':''})</div>
+            <div class="chip">240V: ~${round(amps240,2)} A → ${circuitsRecommended} × 10A circuits</div>
+            <div class="chip">Sender: ${best ? best.model : '—'} (${portsUsed} port${portsUsed>1?'s':''}${redundancy?', redundant':''})</div>
           </div>
         </div>
-        ${drawSchematic(tilesW, tilesH, portsUsed)}
+        ${drawSchematic(tilesW, tilesH, Math.max(1, portsUsedBase), splitMode)}
       `;
 
-      // Quote Description
-      const quote = [
-        `${tilesW}×${tilesH} ${tile.name} LED wall (${tile.pitchMm}mm, ${tile.pxW}×${tile.pxH}px per tile)`,
-        `Overall resolution: ${pxW}×${pxH}px`,
-        `Physical size: ${Math.round(mmW)}×${Math.round(mmH)} mm`,
-        `Power (avg + headroom): ~${Math.round(powerWithHeadroomW)} W @240V`,
-        `Estimated current: ~${round(amps240,2)} A → ${circuits10A} × 10A circuits`,
-        `Recommended sender: ${best ? best.model : 'TBC'} (${portsUsed} port${portsUsed>1?'s':''})`
-      ].join(' • ');
-      const qb = document.getElementById('quoteBox'); if (qb) qb.value = quote;
+      // WhipIt Quote — Title + dot points
+      const title = `${tilesW}×${tilesH} ${tile.name} LED Wall — ${pxW}×${pxH}px (${Math.round(mmW)}×${Math.round(mmH)}mm)`;
+      const bullets = [
+        `High-impact ${tile.pitchMm}mm pitch for crisp visuals at typical viewing distances`,
+        `Overall resolution ${pxW}×${pxH}px across ${tileCount} LED tiles`,
+        `Estimated power (max): ~${Math.round(powerW)} W @240V`,
+        `Electrical: ${circuitsRecommended} × 10A circuits (rule: ≤${15} tiles/circuit)`,
+        `Signal processing: ${best ? best.model : 'TBC'} (${portsUsed} port${portsUsed>1?'s':''}${redundancy?', redundant':''})`,
+      ];
+      const quoteText = [title, ...bullets.map(b => `• ${b}`)].join('\n');
+      const qb = document.getElementById('quoteBox'); if (qb) qb.value = quoteText;
 
       save();
     }
@@ -485,7 +529,7 @@
       populateTiles();
 
       // Inputs
-      const ids=['tile','tilesW','tilesH','tilePower','headroom','utilPct','brightPct','redundancy','showAllModels'];
+      const ids=['tile','tilesW','tilesH','tilePower','redundancy','showAllModels','splitMode'];
       ids.map(id=>$(id)).filter(Boolean).forEach(el=>{
         ['input','change'].forEach(evt=>el.addEventListener(evt, renderAll));
       });
@@ -571,7 +615,7 @@
         navigator.clipboard.writeText(t.value).then(()=>{ alert('Quote text copied'); });
       });
 
-      // Cross-browser PDF export (PNG + blob fallback + print fallback)
+      // Cross-browser PDF export
       $('btn-pdf').addEventListener('click', async () => {
         const el = $('report');
         try {
