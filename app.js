@@ -1,4 +1,4 @@
-// app.js — LED Screen Calculator (remote module)
+// app.js — LED Screen Calculator (remote module with embedded data + in-app editor)
 (function(){
   function injectScript(url){return new Promise((res,rej)=>{const s=document.createElement('script');s.src=url;s.onload=res;s.onerror=()=>rej(new Error('Failed '+url));document.head.appendChild(s);});}
   const needHtml2Canvas = !window.html2canvas;
@@ -7,6 +7,7 @@
   if (needHtml2Canvas) libPromises.push(injectScript('https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js'));
   if (needJsPDF)       libPromises.push(injectScript('https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js'));
 
+  // --- Styles ---
   const style = document.createElement('style');
   style.textContent = `
     :root { --bg:#0b1220; --card:#0f172a; --muted:#94a3b8; --line:#203049; --text:#e2e8f0; --accent:#60a5fa; --chip:#0b2545; }
@@ -38,11 +39,17 @@
     .ok{color:#86efac}
     .inline{display:inline-flex;gap:8px;align-items:center}
     .actions{display:flex;gap:8px;flex-wrap:wrap}
-    dialog{border:none;border-radius:14px;padding:0;max-width:640px;width:clamp(300px,90vw,640px);background:#0f172a;color:#e2e8f0}
+    dialog{border:none;border-radius:14px;padding:0;max-width:900px;width:clamp(300px,95vw,900px);background:#0f172a;color:#e2e8f0}
     dialog .hd{padding:16px;border-bottom:1px solid var(--line)} dialog .bd{padding:16px} dialog .ft{padding:16px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end}
+    .tabs{display:flex;gap:8px;margin-bottom:10px}
+    .tab{padding:6px 10px;border:1px solid var(--line);border-radius:999px;cursor:pointer}
+    .tab.active{background:var(--accent);color:#041225;border-color:transparent}
+    .tbl{max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:12px}
+    .flex{display:flex;gap:10px;flex-wrap:wrap}
   `;
   document.head.appendChild(style);
 
+  // --- App HTML ---
   document.body.innerHTML = `
     <div class="container">
       <div class="center" style="margin-bottom:12px">
@@ -51,7 +58,7 @@
           <div class="muted">Pixels → smallest working sender • power + amps • physical size • presets • redundancy • PDF • shareable URL</div>
         </div>
         <div class="actions">
-          <button class="ghost" id="btn-settings">Settings</button>
+          <button class="ghost" id="btn-manage">Manage data</button>
           <button class="btn" id="btn-pdf">Download A4 PDF</button>
           <button class="ghost" id="btn-share">Copy shareable link</button>
         </div>
@@ -116,15 +123,6 @@
                 <button class="chip" data-preset="16:9">Closest 16:9 aspect</button>
               </div>
             </div>
-
-            <div style="margin-top:14px">
-              <label>Sender inventory (editable here or paste CSV)</label>
-              <div id="inv" class="note"></div>
-              <div class="row" style="margin-top:8px">
-                <button class="ghost" id="btn-edit-senders">Edit senders</button>
-                <button class="ghost" id="btn-edit-tiles">Edit tiles</button>
-              </div>
-            </div>
           </div>
         </div>
 
@@ -164,138 +162,102 @@
         </div>
       </div>
 
-      <div class="card" id="editor" style="margin-top:14px">
-        <div class="hd"><strong>Data Editor</strong> <span class="muted"> • Add/adjust tiles & senders • CSV paste (“model,qty,ports,perPort,total,maxW,maxH”)</span></div>
-        <div class="bd">
-          <div class="row">
-            <div>
-              <label>Sender CSV</label>
-              <textarea id="senderCsv" rows="6" placeholder="VX600,2,6,575000,650000,3840,1920"></textarea>
-              <div class="inline" style="margin-top:8px">
-                <button class="ghost" id="btn-apply-senders">Apply CSV</button>
-                <span class="note">Or edit quantities/specs inline in code if you prefer.</span>
-              </div>
-            </div>
-            <div>
-              <label>Tile CSV</label>
-              <textarea id="tileCsv" rows="6" placeholder="BrandName 2.6,Unilumen,2.6,192,192,500,500,200"></textarea>
-              <div class="inline" style="margin-top:8px">
-                <button class="ghost" id="btn-apply-tiles">Apply CSV</button>
-                <span class="note">Cols: name,brand,pitch,pxW,pxH,mmW,mmH,maxW</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <dialog id="settings">
-        <div class="hd"><strong>Settings</strong></div>
-        <div class="bd">
-          <div class="row">
-            <div>
-              <label>Google Sheet — Senders CSV URL</label>
-              <input id="cfgSenders" placeholder="https://docs.google.com/spreadsheets/d/.../pub?output=csv" />
-            </div>
-            <div>
-              <label>Google Sheet — Tiles CSV URL</label>
-              <input id="cfgTiles" placeholder="https://docs.google.com/spreadsheets/d/.../pub?output=csv" />
-            </div>
-          </div>
-          <div class="note" style="margin-top:8px">Paste each tab’s “Publish to web → CSV” URL. Saved locally to this device.</div>
-        </div>
-        <div class="ft">
-          <button class="ghost" id="cfgCancel">Cancel</button>
-          <button class="btn" id="cfgSave">Save</button>
-        </div>
-      </dialog>
-
       <div class="note" style="margin-top:10px">
         Verify limits against NovaStar manuals and your receiver cards. Numbers here are conservative defaults; update per job/firmware.
       </div>
     </div>
+
+    <!-- Manage Data modal -->
+    <dialog id="manage">
+      <div class="hd"><strong>Manage data</strong></div>
+      <div class="bd">
+        <div class="tabs">
+          <button class="tab active" data-tab="senders">Senders</button>
+          <button class="tab" data-tab="tiles">Tiles</button>
+          <span class="muted" style="margin-left:auto">Data is saved in this browser (localStorage)</span>
+        </div>
+        <div id="pane-senders">
+          <div class="flex" style="margin-bottom:8px">
+            <button class="btn" id="addSender">Add sender</button>
+            <button class="ghost" id="resetSenders">Reset to defaults</button>
+            <button class="ghost" id="exportSenders">Export JSON</button>
+            <input id="importSenders" type="file" accept="application/json" style="width:auto"/>
+          </div>
+          <div class="tbl">
+            <table style="width:100%">
+              <thead>
+                <tr><th>Model</th><th>Qty</th><th>Ports</th><th>perPortPx</th><th>totalPx</th><th>MaxW</th><th>MaxH</th><th></th></tr>
+              </thead>
+              <tbody id="sendersTable"></tbody>
+            </table>
+          </div>
+        </div>
+        <div id="pane-tiles" style="display:none">
+          <div class="flex" style="margin-bottom:8px">
+            <button class="btn" id="addTile">Add tile</button>
+            <button class="ghost" id="resetTiles">Reset to defaults</button>
+            <button class="ghost" id="exportTiles">Export JSON</button>
+            <input id="importTiles" type="file" accept="application/json" style="width:auto"/>
+          </div>
+          <div class="tbl">
+            <table style="width:100%">
+              <thead>
+                <tr><th>ID</th><th>Name</th><th>Pitch(mm)</th><th>pxW</th><th>pxH</th><th>mmW</th><th>mmH</th><th>MaxW</th><th></th></tr>
+              </thead>
+              <tbody id="tilesTable"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div class="ft">
+        <button class="ghost" id="mClose">Close</button>
+      </div>
+    </dialog>
   `;
 
   Promise.all(libPromises).finally(()=>boot());
 
   function boot(){
-    let NOVASTAR_SENDERS = JSON.parse(localStorage.getItem('senders_v2') || 'null') || [
-      { model: "MCTRL300", qty: 0, ports: 4,  perPortPxLimit: 520000, totalPxLimit: 650000,  maxW: 3840, maxH: 1920 },
-      { model: "MCTRL660 Pro", qty: 0, ports: 6, perPortPxLimit: 383333, totalPxLimit: 650000, maxW: 3840, maxH: 1920 },
-      { model: "VX4S", qty: 3, ports: 4,  perPortPxLimit: 575000, totalPxLimit: 650000,  maxW: 3840, maxH: 1920 },
-      { model: "VX4",  qty: 4, ports: 4,  perPortPxLimit: 575000, totalPxLimit: 650000,  maxW: 3840, maxH: 1920 },
-      { model: "MCTRL4K", qty: 4, ports: 16, perPortPxLimit: 650000, totalPxLimit: 8800000, maxW: 7680, maxH: 7680 },
-      { model: "MCTRL660", qty: 5, ports: 4,  perPortPxLimit: 575000, totalPxLimit: 650000,  maxW: 3840, maxH: 1920 },
-      { model: "VX600", qty: 0, ports: 6,  perPortPxLimit: 575000, totalPxLimit: 650000,  maxW: 3840, maxH: 1920 },
-      { model: "VX1000", qty: 0, ports: 10, perPortPxLimit: 575000, totalPxLimit: 650000,  maxW: 3840, maxH: 1920 }
+    // ---- Default embedded data ----
+    const DEFAULT_SENDERS = [
+      { model: "MCTRL300",      qty: 0, ports: 4,  perPortPxLimit: 520000, totalPxLimit: 650000,  maxW: 3840, maxH: 1920 },
+      { model: "MCTRL660 Pro",  qty: 0, ports: 6,  perPortPxLimit: 383333, totalPxLimit: 650000,  maxW: 3840, maxH: 1920 },
+      { model: "VX4S",          qty: 3, ports: 4,  perPortPxLimit: 575000, totalPxLimit: 650000,  maxW: 3840, maxH: 1920 },
+      { model: "VX4",           qty: 4, ports: 4,  perPortPxLimit: 575000, totalPxLimit: 650000,  maxW: 3840, maxH: 1920 },
+      { model: "MCTRL4K",       qty: 4, ports: 16, perPortPxLimit: 650000, totalPxLimit: 8800000, maxW: 7680, maxH: 7680 },
+      { model: "MCTRL660",      qty: 5, ports: 4,  perPortPxLimit: 575000, totalPxLimit: 650000,  maxW: 3840, maxH: 1920 },
+      { model: "VX600",         qty: 0, ports: 6,  perPortPxLimit: 575000, totalPxLimit: 650000,  maxW: 3840, maxH: 1920 },
+      { model: "VX1000",        qty: 0, ports: 10, perPortPxLimit: 575000, totalPxLimit: 650000,  maxW: 3840, maxH: 1920 }
+    ];
+    const DEFAULT_TILES = [
+      { id: "unilumen-2.6",       name: "Unilumen 2.6",        brand: "Unilumen",          pitchMm: 2.6, pxW: 192, pxH: 192, mmW: 500, mmH: 500, maxPowerW: 200 },
+      { id: "absen-aluvision-2.8",name: "Absen/Aluvision 2.8", brand: "Absen/Aluvision",   pitchMm: 2.8, pxW: 176, pxH: 176, mmW: 496, mmH: 496, maxPowerW: 200 },
+      { id: "recience-1.9",       name: "Recience 1.9",        brand: "Recience",          pitchMm: 1.9, pxW: 256, pxH: 256, mmW: 500, mmH: 500, maxPowerW: 200 },
+      { id: "recience-m-1.9",     name: "Recience Mitred 1.9", brand: "Recience (Mitred)", pitchMm: 1.9, pxW: 256, pxH: 256, mmW: 500, mmH: 500, maxPowerW: 200 },
+      { id: "led-arts-3.9",       name: "LED Arts 3.9",        brand: "LED Arts",          pitchMm: 3.9, pxW: 128, pxH: 128, mmW: 500, mmH: 500, maxPowerW: 200 }
     ];
 
-    let LED_TILES = JSON.parse(localStorage.getItem('tiles_v2') || 'null') || [
-      { id: "unilumen-2.6", name: "Unilumen 2.6", brand: "Unilumen", pitchMm: 2.6, pxW: 192, pxH: 192, mmW: 500, mmH: 500, maxPowerW: 200 },
-      { id: "absen-aluvision-2.8", name: "Absen/Aluvision 2.8", brand: "Absen/Aluvision", pitchMm: 2.8, pxW: 176, pxH: 176, mmW: 496, mmH: 496, maxPowerW: 200 },
-      { id: "recience-1.9", name: "Recience 1.9", brand: "Recience", pitchMm: 1.9, pxW: 256, pxH: 256, mmW: 500, mmH: 500, maxPowerW: 200 },
-      { id: "recience-m-1.9", name: "Recience Mitred 1.9", brand: "Recience (Mitred)", pitchMm: 1.9, pxW: 256, pxH: 256, mmW: 500, mmH: 500, maxPowerW: 200 },
-      { id: "led-arts-3.9", name: "LED Arts 3.9", brand: "LED Arts", pitchMm: 3.9, pxW: 128, pxH: 128, mmW: 500, mmH: 500, maxPowerW: 200 }
-    ];
+    // Load from localStorage or defaults
+    let NOVASTAR_SENDERS = JSON.parse(localStorage.getItem('senders_v2') || 'null') || DEFAULT_SENDERS.slice();
+    let LED_TILES = JSON.parse(localStorage.getItem('tiles_v2') || 'null') || DEFAULT_TILES.slice();
 
-    const SHEET_SENDERS_CSV = localStorage.getItem('cfg_senders_csv') || '';
-    const SHEET_TILES_CSV   = localStorage.getItem('cfg_tiles_csv') || '';
-
-    async function fetchCsv(url){
-      const res = await fetch(url, { cache: 'no-store' });
-      const txt = await res.text();
-      return txt.split(/\r?\n/).map(l=>l.trim()).filter(Boolean).map(l=>l.split(',').map(s=>s.trim()));
-    }
-    async function loadDataFromSheets(){
-      try {
-        if (SHEET_SENDERS_CSV) {
-          const rows = await fetchCsv(SHEET_SENDERS_CSV);
-          const [header, ...data] = rows;
-          NOVASTAR_SENDERS = data.map(r => {
-            const idx = (name)=> header.indexOf(name);
-            const get = (name)=> r[idx(name)];
-            return {
-              model: get('model'),
-              qty: parseInt(get('qty')||'0',10),
-              ports: parseInt(get('ports')||'4',10),
-              perPortPxLimit: parseInt(get('perPortPxLimit')||'575000',10),
-              totalPxLimit: parseInt(get('totalPxLimit')||'650000',10),
-              maxW: parseInt(get('maxW')||'3840',10),
-              maxH: parseInt(get('maxH')||'1920',10)
-            };
-          });
-        }
-        if (SHEET_TILES_CSV) {
-          const rows = await fetchCsv(SHEET_TILES_CSV);
-          const [header, ...data] = rows;
-          LED_TILES = data.map(r => {
-            const idx = (name)=> header.indexOf(name);
-            const get = (name)=> r[idx(name)];
-            return {
-              id: get('id') || (get('name')||'tile').toLowerCase().replace(/[^a-z0-9]+/g,'-'),
-              name: get('name') || '',
-              brand: get('brand') || '',
-              pitchMm: parseFloat(get('pitchMm')||'2.6'),
-              pxW: parseInt(get('pxW')||'192',10),
-              pxH: parseInt(get('pxH')||'192',10),
-              mmW: parseFloat(get('mmW')||'500'),
-              mmH: parseFloat(get('mmH')||'500'),
-              maxPowerW: parseFloat(get('maxPowerW')||'200')
-            };
-          });
-        }
-      } catch (e) { console.warn('Sheet fetch failed, using built-in data', e); }
-    }
-
+    // ---------------- Helpers ----------------
     const $ = (id)=>document.getElementById(id);
     const round=(n,dp=0)=>{const f=Math.pow(10,dp);return Math.round((n+Number.EPSILON)*f)/f;};
     const mmToM=(mm)=>mm/1000, mmToIn=(mm)=>mm/25.4;
+
+    function saveData(){
+      localStorage.setItem('senders_v2', JSON.stringify(NOVASTAR_SENDERS));
+      localStorage.setItem('tiles_v2', JSON.stringify(LED_TILES));
+    }
 
     function visibleSenders(){ const showAll = $('#showAllModels').checked; return NOVASTAR_SENDERS.filter(s => showAll ? true : (s.qty||0) > 0); }
     function rankSenders(totalPx, wPx, hPx){
       const pool = visibleSenders();
       return pool
         .map(s => {
-          const portsNeeded = Math.ceil(totalPx / Math.max(1, s.perPortPxLimit));
+          const perPort = Math.max(1, s.perPortPxLimit);
+          const portsNeeded = Math.ceil(totalPx / perPort);
           const fitsTotal = totalPx <= s.totalPxLimit;
           const fitsDims  = wPx <= s.maxW && hPx <= s.maxH;
           const fitsPorts = portsNeeded <= s.ports;
@@ -332,17 +294,13 @@
     }
 
     const elTile=$('tile'), elW=$('tilesW'), elH=$('tilesH'), elTP=$('tilePower'), elHR=$('headroom'),
-          elSpecs=$('specs'), elSenders=$('sender-body'), elReport=$('report'), elInv=$('inv'),
+          elSpecs=$('specs'), elSenders=$('sender-body'), elReport=$('report'),
           elTileMmW=$('tileMmW'), elTileMmH=$('tileMmH'), elUtil=$('utilPct'), elBright=$('brightPct');
 
     function populateTiles(){
       elTile.innerHTML=''; LED_TILES.forEach(t=>{const o=document.createElement('option');o.value=t.id;o.textContent=`${t.name||t.brand} — ${t.pitchMm}mm (${t.pxW}×${t.pxH})`;elTile.appendChild(o);});
       const q = new URLSearchParams(location.search); const tId=q.get('t');
       if (tId && LED_TILES.find(x=>x.id===tId)) elTile.value=tId; else if (LED_TILES.length) elTile.value=LED_TILES[0].id;
-    }
-    function renderInventory(){
-      const visible = visibleSenders().map(s=>`${s.model}: ${s.qty??0}`).join(' • ');
-      elInv.innerHTML = `Visible: ${visible || '—'}<br><span class="note">Hidden models have qty 0 — tick “Show all models” to include them.</span>`;
     }
     function renderAll(){
       const tile = LED_TILES.find(t=>t.id===elTile.value) || LED_TILES[0];
@@ -371,7 +329,7 @@
       addSpec('Aspect', `${aspect}`);
       addSpec('Recommended sender', best ? `${best.model} • Ports ${best.portsNeeded}/${best.ports}` : 'None (check “Show all models”)', best?'ok':'danger');
 
-      elSenders.innerHTML = ranked.length ? '' : '<tr><td colspan="8" class="danger">No in-stock sender fits. Tick “Show all models” for rental options.</td></tr>';
+      elSenders.innerHTML = ranked.length ? '' : '<tr><td colspan="8" class="danger">No sender fits. Adjust spec or show all models.</td></tr>';
       ranked.forEach(s=>{
         const tr=document.createElement('tr'); const units = s.fits ? 1 : Math.ceil(s.portsNeeded/Math.max(1,s.ports));
         tr.innerHTML = `<td>${s.model}</td><td>${s.qty ?? ''}</td><td>${s.ports}</td><td>${s.perPortPxLimit.toLocaleString()}</td><td>${s.totalPxLimit.toLocaleString()}</td><td>${s.portsNeeded} / ${s.ports}</td><td>${s.maxW} × ${s.maxH}</td><td>${units}</td>`;
@@ -390,16 +348,155 @@
         </div>
         <div style="display:grid;grid-template-columns:repeat(12,1fr);gap:8px;padding:10px">
           <div class="spec" style="grid-column:span 4"><div class="l">Source</div><div class="v">HDMI / DP / DVI</div></div>
-          <div class="spec" style="grid-column:span 4"><div class="l">Sender</div><div class="v">${best ? best.model : 'None (stock only)'}</div><div class="l">Ports used</div><div class="v">${best ? best.portsNeeded+'/'+best.ports : '-'}</div></div>
+          <div class="spec" style="grid-column:span 4"><div class="l">Sender</div><div class="v">${best ? best.model : '—'}</div><div class="l">Ports used</div><div class="v">${best ? best.portsNeeded+'/'+best.ports : '-'}</div></div>
           <div class="spec" style="grid-column:span 4"><div class="l">Power</div><div class="v">${round(powerAvgW)} W avg</div><div class="l">+ headroom</div><div class="v">${round(powerWithHeadroomW)} W</div></div>
         </div>
       `;
 
-      localStorage.setItem('tiles_v2', JSON.stringify(LED_TILES));
-      localStorage.setItem('senders_v2', JSON.stringify(NOVASTAR_SENDERS));
+      saveData();
       updateURL();
     }
 
+    // ---- Manage modal logic ----
+    const dlg = document.getElementById('manage');
+    document.getElementById('btn-manage').addEventListener('click', ()=>{
+      refreshManageTables();
+      dlg.showModal();
+    });
+    document.getElementById('mClose').addEventListener('click', ()=> dlg.close());
+    document.querySelectorAll('.tab').forEach(t=> t.addEventListener('click', ()=>{
+      document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+      t.classList.add('active');
+      const tab = t.getAttribute('data-tab');
+      document.getElementById('pane-senders').style.display = tab==='senders'?'block':'none';
+      document.getElementById('pane-tiles').style.display   = tab==='tiles'  ?'block':'none';
+    }));
+
+    function refreshManageTables(){
+      // Senders
+      const tb = document.getElementById('sendersTable'); tb.innerHTML='';
+      NOVASTAR_SENDERS.forEach((s,idx)=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${s.model}</td><td>${s.qty??0}</td><td>${s.ports}</td><td>${s.perPortPxLimit}</td><td>${s.totalPxLimit}</td><td>${s.maxW}</td><td>${s.maxH}</td>
+                        <td><button class="ghost" data-edit-s="${idx}">Edit</button> <button class="ghost" data-del-s="${idx}">Delete</button></td>`;
+        tb.appendChild(tr);
+      });
+      // Tiles
+      const tb2 = document.getElementById('tilesTable'); tb2.innerHTML='';
+      LED_TILES.forEach((t,idx)=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${t.id}</td><td>${t.name}</td><td>${t.pitchMm}</td><td>${t.pxW}</td><td>${t.pxH}</td><td>${t.mmW}</td><td>${t.mmH}</td><td>${t.maxPowerW}</td>
+                        <td><button class="ghost" data-edit-t="${idx}">Edit</button> <button class="ghost" data-del-t="${idx}">Delete</button></td>`;
+        tb2.appendChild(tr);
+      });
+
+      // wire buttons
+      tb.querySelectorAll('[data-edit-s]').forEach(btn=> btn.addEventListener('click', ()=> editSender(parseInt(btn.getAttribute('data-edit-s'),10)) ));
+      tb.querySelectorAll('[data-del-s]').forEach(btn=> btn.addEventListener('click', ()=> { NOVASTAR_SENDERS.splice(parseInt(btn.getAttribute('data-del-s'),10),1); saveData(); refreshManageTables(); renderAll(); } ));
+      tb2.querySelectorAll('[data-edit-t]').forEach(btn=> btn.addEventListener('click', ()=> editTile(parseInt(btn.getAttribute('data-edit-t'),10)) ));
+      tb2.querySelectorAll('[data-del-t]').forEach(btn=> btn.addEventListener('click', ()=> { LED_TILES.splice(parseInt(btn.getAttribute('data-del-t'),10),1); saveData(); refreshManageTables(); populateTiles(); renderAll(); } ));
+    }
+
+    function promptFields(fields, initial={}){
+      const vals = {};
+      for(const f of fields){
+        const val = prompt(f.label, initial[f.key] ?? f.def ?? '');
+        if (val===null) return null;
+        vals[f.key] = f.type==='number' ? Number(val) : val;
+      }
+      return vals;
+    }
+
+    function editSender(idx){
+      const s = NOVASTAR_SENDERS[idx];
+      const vals = promptFields([
+        {key:'model',label:'Model',def:s.model},
+        {key:'qty',label:'Qty',type:'number',def:s.qty||0},
+        {key:'ports',label:'Ports',type:'number',def:s.ports},
+        {key:'perPortPxLimit',label:'Per-port pixels',type:'number',def:s.perPortPxLimit},
+        {key:'totalPxLimit',label:'Total pixels',type:'number',def:s.totalPxLimit},
+        {key:'maxW',label:'Max width px',type:'number',def:s.maxW},
+        {key:'maxH',label:'Max height px',type:'number',def:s.maxH},
+      ], s);
+      if (!vals) return;
+      NOVASTAR_SENDERS[idx] = vals;
+      saveData(); refreshManageTables(); renderAll();
+    }
+    function editTile(idx){
+      const t = LED_TILES[idx];
+      const vals = promptFields([
+        {key:'id',label:'ID',def:t.id},
+        {key:'name',label:'Name',def:t.name},
+        {key:'brand',label:'Brand',def:t.brand||''},
+        {key:'pitchMm',label:'Pitch (mm)',type:'number',def:t.pitchMm},
+        {key:'pxW',label:'Tile px width',type:'number',def:t.pxW},
+        {key:'pxH',label:'Tile px height',type:'number',def:t.pxH},
+        {key:'mmW',label:'Tile mm width',type:'number',def:t.mmW},
+        {key:'mmH',label:'Tile mm height',type:'number',def:t.mmH},
+        {key:'maxPowerW',label:'Max power W',type:'number',def:t.maxPowerW},
+      ], t);
+      if (!vals) return;
+      LED_TILES[idx] = vals;
+      saveData(); refreshManageTables(); populateTiles(); renderAll();
+    }
+
+    document.getElementById('addSender').addEventListener('click', ()=>{
+      const vals = promptFields([
+        {key:'model',label:'Model'},
+        {key:'qty',label:'Qty',type:'number',def:0},
+        {key:'ports',label:'Ports',type:'number',def:4},
+        {key:'perPortPxLimit',label:'Per-port pixels',type:'number',def:575000},
+        {key:'totalPxLimit',label:'Total pixels',type:'number',def:650000},
+        {key:'maxW',label:'Max width px',type:'number',def:3840},
+        {key:'maxH',label:'Max height px',type:'number',def:1920},
+      ]);
+      if (!vals) return;
+      NOVASTAR_SENDERS.push(vals); saveData(); refreshManageTables(); renderAll();
+    });
+    document.getElementById('addTile').addEventListener('click', ()=>{
+      const vals = promptFields([
+        {key:'id',label:'ID (unique, slug)'},
+        {key:'name',label:'Name'},
+        {key:'brand',label:'Brand'},
+        {key:'pitchMm',label:'Pitch (mm)',type:'number',def:2.6},
+        {key:'pxW',label:'Tile px width',type:'number',def:192},
+        {key:'pxH',label:'Tile px height',type:'number',def:192},
+        {key:'mmW',label:'Tile mm width',type:'number',def:500},
+        {key:'mmH',label:'Tile mm height',type:'number',def:500},
+        {key:'maxPowerW',label:'Max power W',type:'number',def:200},
+      ]);
+      if (!vals) return;
+      LED_TILES.push(vals); saveData(); refreshManageTables(); populateTiles(); renderAll();
+    });
+
+    document.getElementById('resetSenders').addEventListener('click', ()=>{
+      if (!confirm('Reset senders to defaults?')) return;
+      NOVASTAR_SENDERS = DEFAULT_SENDERS.slice(); saveData(); refreshManageTables(); renderAll();
+    });
+    document.getElementById('resetTiles').addEventListener('click', ()=>{
+      if (!confirm('Reset tiles to defaults?')) return;
+      LED_TILES = DEFAULT_TILES.slice(); saveData(); refreshManageTables(); populateTiles(); renderAll();
+    });
+
+    // Export/Import JSON
+    document.getElementById('exportSenders').addEventListener('click', ()=>{
+      const blob = new Blob([JSON.stringify(NOVASTAR_SENDERS,null,2)], {type:'application/json'});
+      const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='senders.json'; a.click();
+    });
+    document.getElementById('exportTiles').addEventListener('click', ()=>{
+      const blob = new Blob([JSON.stringify(LED_TILES,null,2)], {type:'application/json'});
+      const a = document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='tiles.json'; a.click();
+    });
+    document.getElementById('importSenders').addEventListener('change', (e)=>{
+      const file = e.target.files[0]; if(!file) return;
+      file.text().then(txt=>{ try{ NOVASTAR_SENDERS = JSON.parse(txt); saveData(); refreshManageTables(); renderAll(); } catch(err){ alert('Invalid JSON'); } });
+    });
+    document.getElementById('importTiles').addEventListener('change', (e)=>{
+      const file = e.target.files[0]; if(!file) return;
+      file.text().then(txt=>{ try{ LED_TILES = JSON.parse(txt); saveData(); refreshManageTables(); populateTiles(); renderAll(); } catch(err){ alert('Invalid JSON'); } });
+    });
+
+    // ---- Presets & wiring ----
     function solveForTarget(pxTargetW, pxTargetH){
       const tile = (document.getElementById('tile') && Array.from(document.getElementById('tile').options).length)
         ? (LED_TILES.find(t=>t.id===document.getElementById('tile').value) || LED_TILES[0])
@@ -414,29 +511,6 @@
       for(let w=1; w<=60; w++){ for(let h=1; h<=60; h++){ const ratio=(tile.pxW*w)/(tile.pxH*h), diff=Math.abs(ratio-16/9); if (diff<bestDiff){bestDiff=diff;bestW=w;bestH=h;} } }
       document.getElementById('tilesW').value=bestW; document.getElementById('tilesH').value=bestH; renderAll();
     }
-
-    const csvRows = (txt)=> txt.split(/\r?\n/).map(l=>l.trim()).filter(Boolean).map(l=>l.split(',').map(x=>x.trim()));
-    document.getElementById('btn-apply-senders').addEventListener('click', ()=>{
-      const rows = csvRows(document.getElementById('senderCsv').value);
-      rows.forEach(r=>{
-        const [model,qty,ports,perPort,total,maxW,maxH] = r;
-        const s = { model, qty: qty?parseInt(qty,10):0, ports: parseInt(ports||'4',10), perPortPxLimit: parseInt(perPort||'575000',10), totalPxLimit: parseInt(total||'650000',10), maxW: parseInt(maxW||'3840',10), maxH: parseInt(maxH||'1920',10) };
-        const i = NOVASTAR_SENDERS.findIndex(x=>x.model.toUpperCase()===model.toUpperCase());
-        if (i>=0) NOVASTAR_SENDERS[i]=s; else NOVASTAR_SENDERS.push(s);
-      });
-      renderInventory(); renderAll();
-    });
-    document.getElementById('btn-apply-tiles').addEventListener('click', ()=>{
-      const rows = csvRows(document.getElementById('tileCsv').value);
-      rows.forEach(r=>{
-        const [name,brand,pitch,pxW,pxH,mmW,mmH,maxPowerW] = r;
-        const id = (name||brand||'tile').toLowerCase().replace(/[^a-z0-9]+/g,'-');
-        const t = { id, name, brand, pitchMm: parseFloat(pitch||'2.6'), pxW: parseInt(pxW||'192',10), pxH: parseInt(pxH||'192',10), mmW: parseFloat(mmW||'500'), mmH: parseFloat(mmH||'500'), maxPowerW: parseFloat(maxPowerW||'200') };
-        const i = LED_TILES.findIndex(x=>x.id===id);
-        if (i>=0) LED_TILES[i]=t; else LED_TILES.push(t);
-      });
-      populateTiles(); renderAll();
-    });
 
     document.getElementById('btn-share').addEventListener('click', ()=>{ navigator.clipboard.writeText(location.href).then(()=>alert('Link copied to clipboard')); });
     document.getElementById('btn-pdf').addEventListener('click', async () => {
@@ -454,29 +528,13 @@
       } catch (err) { console.error(err); alert('PDF export failed. Use Print → Save as PDF as a fallback.'); }
     });
 
-    const dlg = document.getElementById('settings');
-    document.getElementById('btn-settings').addEventListener('click', ()=>{
-      document.getElementById('cfgSenders').value = localStorage.getItem('cfg_senders_csv') || '';
-      document.getElementById('cfgTiles').value   = localStorage.getItem('cfg_tiles_csv') || '';
-      dlg.showModal();
-    });
-    document.getElementById('cfgCancel').addEventListener('click', ()=> dlg.close());
-    document.getElementById('cfgSave').addEventListener('click', ()=>{
-      const s = document.getElementById('cfgSenders').value.trim();
-      const t = document.getElementById('cfgTiles').value.trim();
-      if (s) localStorage.setItem('cfg_senders_csv', s); else localStorage.removeItem('cfg_senders_csv');
-      if (t) localStorage.setItem('cfg_tiles_csv', t); else localStorage.removeItem('cfg_tiles_csv');
-      dlg.close(); (async()=>{ await loadDataFromSheets(); populateTiles(); renderInventory(); renderAll(); })();
-    });
-
-    async function wire(){
-      await loadDataFromSheets();
+    function wire(){
       populateTiles(); loadFromURL();
       ['input','change'].forEach(evt=> [document.getElementById('tile'), document.getElementById('tilesW'), document.getElementById('tilesH'), document.getElementById('tilePower'), document.getElementById('headroom'), document.getElementById('tileMmW'), document.getElementById('tileMmH'), document.getElementById('utilPct'), document.getElementById('brightPct'), document.getElementById('redundancy'), document.getElementById('showAllModels')].forEach(el=>el.addEventListener(evt, renderAll)));
       document.querySelectorAll('[data-preset]').forEach(btn=>{
         btn.addEventListener('click', ()=>{ const p=btn.getAttribute('data-preset'); if (p==='1080p') solveForTarget(1920,1080); if (p==='4k') solveForTarget(3840,2160); if (p==='16:9') closest169(); });
       });
-      renderInventory(); renderAll();
+      renderAll();
     }
     wire();
   }
