@@ -1,75 +1,512 @@
 <!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <title>LED Screen Calculator — Loader</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <style>
-    :root { --bg:#0b1220; --card:#0f172a; --muted:#94a3b8; --line:#203049; --text:#e2e8f0; --accent:#60a5fa; }
-    *{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui,Arial,sans-serif;background:var(--bg);color:var(--text)}
-    .top{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:10px 14px;background:#0f172a;border-bottom:1px solid #203049}
-    button{background:#60a5fa;color:#041225;border:none;border-radius:10px;padding:8px 12px;font-weight:600;cursor:pointer}
-    button.ghost{background:transparent;color:var(--text);border:1px solid var(--line)}
-    .msg{padding:14px}
-    dialog{border:none;border-radius:14px;padding:0;max-width:640px;width:clamp(300px,90vw,640px);background:#0f172a;color:#e2e8f0}
-    dialog .hd{padding:16px;border-bottom:1px solid var(--line)} dialog .bd{padding:16px} dialog .ft{padding:16px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end}
-    input{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#0b1a2e;color:#e2e8f0}
-    .muted{color:#94a3b8}
-  </style>
+<meta charset="utf-8" />
+<title>LED Screen Calculator — One-File (Editable Senders)</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://cdn.jsdelivr.net">
+<style>
+  :root { --bg:#0b1220; --card:#0f172a; --muted:#94a3b8; --line:#203049; --text:#e2e8f0; --accent:#60a5fa; --chip:#0b2545; }
+  *{box-sizing:border-box} body{margin:0;font-family:Inter,system-ui,Arial,sans-serif;background:var(--bg);color:var(--text)}
+  a{color:var(--accent);text-decoration:none}
+  .container{max-width:1200px;margin:0 auto;padding:20px}
+  h1{font-size:22px;margin:0 0 8px 0}
+  .muted{color:var(--muted)}
+  .grid{display:grid;gap:16px}
+  @media(min-width:1000px){ .grid-3{grid-template-columns:320px 1fr} }
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:0 1px 2px rgba(0,0,0,.15)}
+  .card .hd{padding:16px 16px 0} .card .bd{padding:16px}
+  label{font-size:12px;color:var(--muted);display:block;margin-bottom:6px}
+  input,select,button,textarea{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#0b1a2e;color:#e2e8f0}
+  input[type="checkbox"]{width:auto}
+  button.btn{background:var(--accent);border-color:transparent;color:#051325;cursor:pointer;font-weight:600}
+  button.ghost{background:transparent;border-color:var(--line);color:#e2e8f0}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .spec{border:1px solid var(--line);border-radius:12px;padding:10px;background:#0b1a2e}
+  .spec .l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em}
+  .spec .v{font-weight:600}
+  .chips{display:flex;gap:8px;flex-wrap:wrap}
+  .chip{background:var(--chip);border:1px solid var(--line);padding:4px 10px;border-radius:999px;font-size:12px;color:#bcd7ff;cursor:pointer}
+  .center{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .frame{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:#031022}
+  .note{font-size:12px;color:var(--muted)}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th,td{padding:8px 6px;border-top:1px solid var(--line);text-align:left;vertical-align:top}
+  .danger{color:#fecaca}
+  .ok{color:#86efac}
+  .inline{display:inline-flex;gap:8px;align-items:center}
+  .actions{display:flex;gap:8px;flex-wrap:wrap}
+  dialog{border:none;border-radius:14px;padding:0;max-width:980px;width:clamp(320px,95vw,980px);background:#0f172a;color:#e2e8f0}
+  dialog .hd{padding:16px;border-bottom:1px solid var(--line)} dialog .bd{padding:16px} dialog .ft{padding:16px;border-top:1px solid var(--line);display:flex;gap:8px;justify-content:flex-end}
+  .tabs{display:flex;gap:8px;margin-bottom:10px}
+  .tab{padding:6px 10px;border:1px solid var(--line);border-radius:999px;cursor:pointer}
+  .tab.active{background:var(--accent);color:#041225;border-color:transparent}
+  .tbl{max-height:320px;overflow:auto;border:1px solid var(--line);border-radius:12px}
+  .flex{display:flex;gap:10px;flex-wrap:wrap}
+  .small{font-size:12px}
+  .cell input{width:100%;padding:6px 8px}
+  .cell .chk{transform:scale(1.2)}
+</style>
 </head>
 <body>
-  <div class="top">
-    <div>LED Screen Calculator — <span class="muted">loading app…</span></div>
-    <div>
-      <button class="ghost" id="btn-settings">Settings</button>
-      <button id="btn-reload">Reload app</button>
+  <div class="container">
+    <div class="center" style="margin-bottom:12px">
+      <div>
+        <h1>LED Screen Calculator — Pro</h1>
+        <div class="muted">Pixels → smallest sender • power • dimensions • presets • editable inventory • PDF • share URL</div>
+      </div>
+      <div class="actions">
+        <button class="ghost" id="btn-manage">Manage data</button>
+        <button class="btn" id="btn-pdf">Download A4 PDF</button>
+        <button class="ghost" id="btn-share">Copy shareable link</button>
+      </div>
+    </div>
+
+    <div class="grid grid-3">
+      <div class="card">
+        <div class="hd"><strong>Inputs</strong></div>
+        <div class="bd">
+          <div class="row">
+            <div>
+              <label>Tile product</label>
+              <select id="tile"></select>
+            </div>
+            <div>
+              <label>Tile size (mm) — W × H</label>
+              <div class="row"><input id="tileMmW" type="number" min="1" value="500"/><input id="tileMmH" type="number" min="1" value="500"/></div>
+            </div>
+          </div>
+
+          <div class="row" style="margin-top:10px">
+            <div>
+              <label>Tiles (W)</label>
+              <input id="tilesW" type="number" min="1" value="6" />
+            </div>
+            <div>
+              <label>Tiles (H)</label>
+              <input id="tilesH" type="number" min="1" value="4" />
+            </div>
+          </div>
+
+          <div class="row" style="margin-top:10px">
+            <div>
+              <label>Tile max power (W)</label>
+              <input id="tilePower" type="number" min="1" value="200" />
+            </div>
+            <div>
+              <label>Utilisation (% of max) • brightness factor</label>
+              <div class="row"><input id="utilPct" type="number" min="1" max="100" value="40"/><input id="brightPct" type="number" min="1" max="100" value="80"/></div>
+            </div>
+          </div>
+
+          <div class="row" style="margin-top:10px">
+            <div>
+              <label>Headroom (%)</label>
+              <input id="headroom" type="number" min="0" value="20" />
+            </div>
+            <div>
+              <label>Redundancy</label>
+              <select id="redundancy">
+                <option value="none">None</option>
+                <option value="dual">Dual backup (primary + backup)</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="margin-top:10px">
+            <label>Quick presets</label>
+            <div class="chips">
+              <button class="chip" data-preset="1080p">Target 1080p (1920×1080)</button>
+              <button class="chip" data-preset="4k">Target 4K (3840×2160)</button>
+              <button class="chip" data-preset="16:9">Closest 16:9 aspect</button>
+            </div>
+          </div>
+
+          <div class="inline" style="margin-top:12px">
+            <input type="checkbox" id="showAllModels" />
+            <label for="showAllModels" style="margin:0">Show all sender models (incl. qty 0)</label>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid">
+        <div class="card">
+          <div class="hd"><strong>Calculated Specs</strong></div>
+          <div class="bd">
+            <div class="grid" style="grid-template-columns:repeat(3,minmax(0,1fr));gap:10px" id="specs"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="hd"><strong>Signal & Power Schematic (rough)</strong></div>
+          <div class="bd">
+            <div id="report" class="frame" style="padding:12px"></div>
+            <div class="note" style="margin-top:6px">Diagram is schematic. Verify data/power chaining per receiver card & PSU layout.</div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="hd"><strong>Sender Fit (ranked — smallest that works first)</strong></div>
+          <div class="bd" style="overflow:auto">
+            <table>
+              <thead>
+                <tr>
+                  <th>Model</th><th>Qty</th><th>Ports</th><th>Per-port cap</th><th>Total cap</th><th>Ports used</th><th>Max WxH</th><th>Units</th>
+                </tr>
+              </thead>
+              <tbody id="sender-body"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="note" style="margin-top:10px">
+      Verify limits against NovaStar manuals / firmware. You can edit limits in <b>Manage data</b>.
     </div>
   </div>
-  <div id="app-root" class="msg">If this message stays, the app JS failed to load.</div>
 
-  <dialog id="settings">
-    <div class="hd"><strong>Loader Settings</strong></div>
+  <!-- Manage Data modal -->
+  <dialog id="manage">
+    <div class="hd"><strong>Manage data</strong></div>
     <div class="bd">
-      <label>App JS URL (leave blank to load <code>./app.js</code>)</label>
-      <input id="cfgAppJs" placeholder="https://raw.githubusercontent.com/your-org/your-repo/main/app.js" />
-      <p class="muted" style="margin-top:8px">You can host <code>app.js</code> in this repo, another repo, or a Gist.</p>
+      <div class="tabs">
+        <button class="tab active" data-tab="senders">Senders</button>
+        <button class="tab" data-tab="tiles">Tiles</button>
+        <span class="muted" style="margin-left:auto">Saved locally (this browser)</span>
+      </div>
+
+      <div id="pane-senders">
+        <div class="flex" style="margin-bottom:8px">
+          <button class="btn" id="addSender">Add sender</button>
+          <button class="ghost" id="btnTypicalCaps" title="VX4/VX4S/MCTRL660 ≈ 650k/port, 2.3M total">Typical caps</button>
+          <button class="ghost" id="btnConservativeCaps" title="VX4/VX4S/MCTRL660 ≈ 575k/port, 2.0M total">Conservative caps</button>
+          <button class="ghost" id="resetSenders">Reset to defaults</button>
+          <button class="ghost" id="exportSenders">Export JSON</button>
+          <input id="importSenders" type="file" accept="application/json" style="width:auto"/>
+        </div>
+        <div class="tbl">
+          <table style="width:100%">
+            <thead>
+              <tr>
+                <th style="min-width:150px">Model</th>
+                <th>Qty</th><th>Ports</th><th>Per-port px</th><th>Total px</th><th>Max W</th><th>Max H</th>
+                <th>Preferred</th><th style="min-width:160px">Notes</th><th></th>
+              </tr>
+            </thead>
+            <tbody id="sendersTable"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div id="pane-tiles" style="display:none">
+        <div class="flex" style="margin-bottom:8px">
+          <button class="btn" id="addTile">Add tile</button>
+          <button class="ghost" id="resetTiles">Reset to defaults</button>
+          <button class="ghost" id="exportTiles">Export JSON</button>
+          <input id="importTiles" type="file" accept="application/json" style="width:auto"/>
+        </div>
+        <div class="tbl">
+          <table style="width:100%">
+            <thead>
+              <tr><th>ID</th><th>Name</th><th>Pitch(mm)</th><th>pxW</th><th>pxH</th><th>mmW</th><th>mmH</th><th>MaxW</th><th></th></tr>
+            </thead>
+            <tbody id="tilesTable"></tbody>
+          </table>
+        </div>
+      </div>
     </div>
     <div class="ft">
-      <button class="ghost" id="cfgCancel">Cancel</button>
-      <button id="cfgSave">Save & Reload</button>
+      <button class="ghost" id="mClose">Close</button>
     </div>
   </dialog>
 
+  <!-- Libraries (CDN) -->
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
+  <!-- App script -->
   <script>
-    const root = document.getElementById('app-root');
-    const APP_JS_KEY = 'cfg_app_js_url';
-    const getAppUrl = () => (localStorage.getItem(APP_JS_KEY)?.trim()) || './app.js';
-    function loadScript(src){
-      return new Promise((resolve,reject)=>{
-        const s=document.createElement('script');
-        s.src = src + (src.includes('?')?'&':'?') + 'v=' + Date.now(); // cache-bust
-        s.onload=resolve; s.onerror=()=>reject(new Error('Failed to load '+src));
-        document.head.appendChild(s);
+  window.addEventListener('load', function(){
+    // ---------- Defaults ----------
+    const DEFAULT_SENDERS = [
+      { model: "VX4S", ports: 4, perPortPxLimit: 650000, totalPxLimit: 2300000, maxW: 3840, maxH: 1920, qty: 3, preferred: false, notes: "" },
+      { model: "VX4",  ports: 4, perPortPxLimit: 650000, totalPxLimit: 2300000, maxW: 3840, maxH: 1920, qty: 4, preferred: true,  notes: "Prefer this when it fits" },
+      { model: "MCTRL660", ports: 4, perPortPxLimit: 650000, totalPxLimit: 2300000, maxW: 3840, maxH: 1920, qty: 5, preferred: false, notes: "" },
+      { model: "MCTRL660 PRO", ports: 6, perPortPxLimit: 650000, totalPxLimit: 2300000, maxW: 3840, maxH: 1920, qty: 0, preferred: false, notes: "" },
+      { model: "MCTRL4K", ports: 16, perPortPxLimit: 650000, totalPxLimit: 8800000, maxW: 7680, maxH: 7680, qty: 4, preferred: false, notes: "" },
+    ];
+    const DEFAULT_TILES = [
+      { id: "unilumen-2.6", name: "Unilumen 2.6", brand: "Unilumen", pitchMm: 2.6, pxW: 192, pxH: 192, mmW: 500, mmH: 500, maxPowerW: 200 },
+      { id: "absen-aluvision-2.8", name: "Absen/Aluvision 2.8", brand: "Absen/Aluvision", pitchMm: 2.8, pxW: 176, pxH: 176, mmW: 496, mmH: 496, maxPowerW: 200 },
+      { id: "recience-1.9", name: "Recience 1.9", brand: "Recience", pitchMm: 1.9, pxW: 256, pxH: 256, mmW: 500, mmH: 500, maxPowerW: 200 },
+      { id: "recience-m-1.9", name: "Recience Mitred 1.9", brand: "Recience (Mitred)", pitchMm: 1.9, pxW: 256, pxH: 256, mmW: 500, mmH: 500, maxPowerW: 200 },
+      { id: "led-arts-3.9", name: "LED Arts 3.9", brand: "LED Arts", pitchMm: 3.9, pxW: 128, pxH: 128, mmW: 500, mmH: 500, maxPowerW: 200 }
+    ];
+
+    // ---------- Storage helpers (safe) ----------
+    function safeParse(key, fallback){ try{ const v = JSON.parse(localStorage.getItem(key) || 'null'); return v ?? fallback; } catch { return fallback; } }
+    let NOVASTAR_SENDERS = safeParse('senders_v3', DEFAULT_SENDERS.slice());
+    let LED_TILES       = safeParse('tiles_v3',   DEFAULT_TILES.slice());
+    const save = () => { localStorage.setItem('senders_v3', JSON.stringify(NOVASTAR_SENDERS)); localStorage.setItem('tiles_v3', JSON.stringify(LED_TILES)); };
+
+    // ---------- Utilities ----------
+    const $ = (id)=>document.getElementById(id);
+    const round=(n,dp=0)=>{const f=Math.pow(10,dp);return Math.round((n+Number.EPSILON)*f)/f;};
+    const mmToM=(mm)=>mm/1000, mmToIn=(mm)=>mm/25.4;
+
+    function visibleSenders(){ return ($('#showAllModels')?.checked ? NOVASTAR_SENDERS : NOVASTAR_SENDERS.filter(s => (s.qty||0) > 0)); }
+
+    function rankSenders(totalPx, wPx, hPx){
+      return visibleSenders().map(s=>{
+        const perPort=Math.max(1,s.perPortPxLimit);
+        const portsNeeded=Math.ceil(totalPx/perPort);
+        const fitsTotal=totalPx<=s.totalPxLimit;
+        const fitsDims=wPx<=s.maxW && hPx<=s.maxH;
+        const fitsPorts=portsNeeded<=s.ports;
+        const fits=fitsTotal&&fitsDims&&fitsPorts;
+        const unitsNeeded=fits?1:Math.ceil(portsNeeded/Math.max(1,s.ports));
+        return {...s,fits,portsNeeded,unitsNeeded};
+      }).filter(s=>s.fits || s.unitsNeeded>1)
+        .sort((a,b)=>{
+          // 1) prefer fits
+          if ((a.fits?0:1)!==(b.fits?0:1)) return (a.fits?0:1)-(b.fits?0:1);
+          // 2) if both fit, prefer Preferred models
+          if ((b.preferred?1:0)!==(a.preferred?1:0)) return (b.preferred?1:0)-(a.preferred?1:0);
+          // 3) smallest total capacity, then fewer ports needed, then fewer ports
+          if (a.totalPxLimit!==b.totalPxLimit) return a.totalPxLimit-b.totalPxLimit;
+          if (a.portsNeeded!==b.portsNeeded)   return a.portsNeeded-b.portsNeeded;
+          if (a.ports!==b.ports)               return a.ports-b.ports;
+          return 0;
+        });
+    }
+    const chooseBest=(px, w, h)=> rankSenders(px,w,h).find(r=>r.fits)||null;
+
+    function populateTiles(){
+      const sel=$('tile'); sel.innerHTML='';
+      LED_TILES.forEach(t=>{const o=document.createElement('option');o.value=t.id;o.textContent=`${t.name||t.brand} — ${t.pitchMm}mm (${t.pxW}×${t.pxH})`;sel.appendChild(o);});
+      if (!sel.value && LED_TILES[0]) sel.value=LED_TILES[0].id;
+    }
+
+    function renderAll(){
+      const tile=LED_TILES.find(t=>t.id===$('tile').value)||LED_TILES[0];
+      const tilesW=+$('tilesW').value||0, tilesH=+$('tilesH').value||0;
+      const pxW=tile.pxW*tilesW, pxH=tile.pxH*tilesH, totalPx=pxW*pxH;
+      const mmW=(+$('tileMmW').value||tile.mmW||500)*tilesW, mmH=(+$('tileMmH').value||tile.mmH||500)*tilesH;
+      const mW=mmToM(mmW), mH=mmToM(mmH), inW=mmToIn(mmW), inH=mmToIn(mmH);
+      const diagIn=Math.sqrt(inW*inW+inH*inH), ppi=Math.sqrt(pxW*pxW+pxH*pxH)/Math.max(1,diagIn), aspect=`${round(pxW/Math.max(1,pxH),2)}:1`;
+      const tileCount=tilesW*tilesH, tilePower=+$('tilePower').value||0, util=(+$('utilPct').value||40)/100, bright=(+$('brightPct').value||80)/100, headroom=(+$('headroom').value||20)/100;
+      const powerAvgW=tileCount*tilePower*util*bright, powerWithHeadroomW=powerAvgW*(1+headroom), amps230=powerWithHeadroomW/230, amps110=powerWithHeadroomW/110;
+
+      const ranked=rankSenders(totalPx,pxW,pxH), best=chooseBest(totalPx,pxW,pxH);
+
+      const specs=$('specs'); specs.innerHTML='';
+      const spec=(l,v,cls='')=>{const d=document.createElement('div');d.className='spec';d.innerHTML=`<div class="l">${l}</div><div class="v ${cls}">${v}</div>`;specs.appendChild(d);}
+      spec('Tile', `${tile.name||tile.brand} ${tile.pitchMm}mm (${tile.pxW}×${tile.pxH})`);
+      spec('Array (tiles)', `${tilesW} × ${tilesH}`);
+      spec('Screen res', `${pxW} × ${pxH}`);
+      spec('Pixels total', totalPx.toLocaleString());
+      spec('Physical size', `${round(mW,3)} m × ${round(mH,3)} m`);
+      spec('Diagonal', `${round(diagIn,1)} in (${round(ppi,1)} ppi)`);
+      spec('Power avg', `${round(powerAvgW)} W`);
+      spec(`Power +${round(headroom*100)}%`, `${round(powerWithHeadroomW)} W`);
+      spec('Amps @230V', `${round(amps230,2)} A`);
+      spec('Amps @110V', `${round(amps110,2)} A`);
+      spec('Aspect', `${aspect}`);
+      spec('Recommended sender', best ? `${best.model} • Ports ${best?.portsNeeded||'?'} / ${best.ports}` : 'None in visible list', best?'ok':'danger');
+
+      const tb=$('sender-body'); tb.innerHTML = ranked.length?'':'<tr><td colspan="8" class="danger">No sender fits. Adjust spec or show all models.</td></tr>';
+      ranked.forEach(s=>{
+        const units = s.fits ? 1 : Math.ceil(s.portsNeeded/Math.max(1,s.ports));
+        const tr=document.createElement('tr');
+        tr.innerHTML=`<td>${s.model}</td><td>${s.qty??''}</td><td>${s.ports}</td><td>${s.perPortPxLimit.toLocaleString()}</td><td>${s.totalPxLimit.toLocaleString()}</td><td>${s.portsNeeded} / ${s.ports}</td><td>${s.maxW} × ${s.maxH}</td><td>${units}</td>`;
+        tb.appendChild(tr);
       });
+
+      $('report').innerHTML = `
+        <div class="center" style="padding:8px 10px">
+          <div><strong>Screen</strong></div>
+          <div class="chips">
+            <div class="chip">${tile.name || tile.brand} • ${tile.pitchMm}mm</div>
+            <div class="chip">${tilesW}×${tilesH} tiles</div>
+            <div class="chip">${pxW}×${pxH}px</div>
+            <div class="chip">${round(mW,2)}m × ${round(mH,2)}m</div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(12,1fr);gap:8px;padding:10px">
+          <div class="spec" style="grid-column:span 4"><div class="l">Source</div><div class="v">HDMI / DP / DVI</div></div>
+          <div class="spec" style="grid-column:span 4"><div class="l">Sender</div><div class="v">${best ? best.model : '—'}</div><div class="l">Ports used</div><div class="v">${best ? (best.portsNeeded+'/'+best.ports) : '-'}</div></div>
+          <div class="spec" style="grid-column:span 4"><div class="l">Power</div><div class="v">${round(powerAvgW)} W avg</div><div class="l">+ headroom</div><div class="v">${round(powerWithHeadroomW)} W</div></div>
+        </div>
+      `;
+
+      save();
     }
-    async function loadApp(){
-      root.textContent = 'Loading app…';
-      try { await loadScript(getAppUrl()); }
-      catch (e){ console.error(e); root.innerHTML = '<div style="color:#fecaca">Could not load the app file. Check the App JS URL in Settings.</div>'; }
+
+    // ---------- Manage Data UI ----------
+    function promptMulti(pairs){
+      const out=[]; for(const [label,def] of pairs){ const v=prompt(label, def); if(v===null) return null; out.push(v); } return out;
     }
-    const dlg = document.getElementById('settings');
-    document.getElementById('btn-settings').addEventListener('click', ()=>{
-      document.getElementById('cfgAppJs').value = localStorage.getItem(APP_JS_KEY) || '';
-      dlg.showModal();
-    });
-    document.getElementById('cfgCancel').addEventListener('click', ()=> dlg.close());
-    document.getElementById('cfgSave').addEventListener('click', ()=>{
-      const url = document.getElementById('cfgAppJs').value.trim();
-      if (url) localStorage.setItem(APP_JS_KEY, url); else localStorage.removeItem(APP_JS_KEY);
-      dlg.close(); location.reload();
-    });
-    document.getElementById('btn-reload').addEventListener('click', loadApp);
-    loadApp();
+    function refreshTables(){
+      // SENDERS (inline editable)
+      const tb=$('sendersTable'); tb.innerHTML='';
+      NOVASTAR_SENDERS.forEach((s,i)=>{
+        const tr=document.createElement('tr');
+        tr.innerHTML = `
+          <td class="cell"><input value="${s.model}"></td>
+          <td class="cell"><input type="number" value="${s.qty||0}"></td>
+          <td class="cell"><input type="number" value="${s.ports}"></td>
+          <td class="cell"><input type="number" value="${s.perPortPxLimit}"></td>
+          <td class="cell"><input type="number" value="${s.totalPxLimit}"></td>
+          <td class="cell"><input type="number" value="${s.maxW}"></td>
+          <td class="cell"><input type="number" value="${s.maxH}"></td>
+          <td class="cell small"><input class="chk" type="checkbox" ${s.preferred?'checked':''}></td>
+          <td class="cell"><input value="${s.notes||''}"></td>
+          <td><button class="ghost" data-del="${i}">Delete</button></td>
+        `;
+        const [iModel,iQty,iPorts,iPer,iTot,iMaxW,iMaxH,iPref,iNotes] = tr.querySelectorAll('input');
+        iModel.addEventListener('change', ()=>{ s.model = iModel.value; save(); renderAll(); });
+        iQty.addEventListener('change',   ()=>{ s.qty = +iQty.value; save(); renderAll(); });
+        iPorts.addEventListener('change', ()=>{ s.ports = +iPorts.value; save(); renderAll(); });
+        iPer.addEventListener('change',   ()=>{ s.perPortPxLimit = +iPer.value; save(); renderAll(); });
+        iTot.addEventListener('change',   ()=>{ s.totalPxLimit   = +iTot.value; save(); renderAll(); });
+        iMaxW.addEventListener('change',  ()=>{ s.maxW = +iMaxW.value; save(); renderAll(); });
+        iMaxH.addEventListener('change',  ()=>{ s.maxH = +iMaxH.value; save(); renderAll(); });
+        iPref.addEventListener('change',  ()=>{ s.preferred = iPref.checked; save(); renderAll(); });
+        iNotes.addEventListener('change', ()=>{ s.notes = iNotes.value; save(); });
+
+        tr.querySelector('[data-del]')?.addEventListener('click', ()=>{
+          NOVASTAR_SENDERS.splice(i,1); save(); refreshTables(); renderAll();
+        });
+        tb.appendChild(tr);
+      });
+
+      // TILES (simple list with edit via prompt)
+      const tt=$('tilesTable'); tt.innerHTML='';
+      LED_TILES.forEach((t,i)=>{
+        const tr=document.createElement('tr');
+        tr.innerHTML=`<td>${t.id}</td><td>${t.name}</td><td>${t.pitchMm}</td><td>${t.pxW}</td><td>${t.pxH}</td><td>${t.mmW}</td><td>${t.mmH}</td><td>${t.maxPowerW}</td>
+          <td><button class="ghost" data-te="${i}">Edit</button> <button class="ghost" data-td="${i}">Delete</button></td>`;
+        tt.appendChild(tr);
+      });
+      tt.querySelectorAll('[data-te]').forEach(b=>b.addEventListener('click', ()=>{
+        const i=+b.getAttribute('data-te'), t=LED_TILES[i];
+        const v=promptMulti([['ID',t.id],['Name',t.name],['Brand',t.brand||''],['Pitch (mm)',t.pitchMm],['Tile px width',t.pxW],['Tile px height',t.pxH],['Tile mm width',t.mmW],['Tile mm height',t.mmH],['Max power W',t.maxPowerW]]);
+        if(!v) return;
+        LED_TILES[i]={ id:v[0], name:v[1], brand:v[2], pitchMm:+v[3], pxW:+v[4], pxH:+v[5], mmW:+v[6], mmH:+v[7], maxPowerW:+v[8] };
+        save(); refreshTables(); populateTiles(); renderAll();
+      }));
+      tt.querySelectorAll('[data-td]').forEach(b=>b.addEventListener('click', ()=>{
+        const i=+b.getAttribute('data-td'); LED_TILES.splice(i,1); save(); refreshTables(); populateTiles(); renderAll();
+      }));
+    }
+
+    // ---------- Buttons / wiring ----------
+    function wire(){
+      populateTiles();
+
+      // Inputs
+      const ids=['tile','tilesW','tilesH','tilePower','headroom','tileMmW','tileMmH','utilPct','brightPct','redundancy','showAllModels'];
+      ids.map(id=>$(id)).filter(Boolean).forEach(el=>{
+        ['input','change'].forEach(evt=>el.addEventListener(evt, renderAll));
+      });
+
+      // Presets
+      document.querySelectorAll('[data-preset]').forEach(btn=>{
+        btn.addEventListener('click', ()=>{
+          const p=btn.getAttribute('data-preset');
+          const tile=LED_TILES.find(t=>t.id===$('tile').value)||LED_TILES[0];
+          if (p==='1080p'){ $('tilesW').value=Math.max(1,Math.round(1920/tile.pxW)); $('tilesH').value=Math.max(1,Math.round(1080/tile.pxH)); }
+          if (p==='4k'){   $('tilesW').value=Math.max(1,Math.round(3840/tile.pxW)); $('tilesH').value=Math.max(1,Math.round(2160/tile.pxH)); }
+          if (p==='16:9'){
+            let bestW=1,bestH=1,best=1e9;
+            for(let w=1; w<=60; w++){ for(let h=1; h<=60; h++){ const d=Math.abs((tile.pxW*w)/(tile.pxH*h)-16/9); if(d<best){best=d;bestW=w;bestH=h;} } }
+            $('tilesW').value=bestW; $('tilesH').value=bestH;
+          }
+          renderAll();
+        });
+      });
+
+      // Manage data modal
+      const dlg=$('manage');
+      $('btn-manage').addEventListener('click', ()=>{ refreshTables(); dlg.showModal(); });
+      $('mClose').addEventListener('click', ()=> dlg.close());
+      document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click', ()=>{
+        document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+        t.classList.add('active');
+        const tab=t.getAttribute('data-tab');
+        $('pane-senders').style.display = tab==='senders'?'block':'none';
+        $('pane-tiles').style.display   = tab==='tiles'  ?'block':'none';
+      }));
+
+      // Add sender
+      $('addSender').addEventListener('click', ()=>{
+        NOVASTAR_SENDERS.push({ model:"New Sender", qty:0, ports:4, perPortPxLimit:650000, totalPxLimit:2300000, maxW:3840, maxH:1920, preferred:false, notes:"" });
+        save(); refreshTables();
+      });
+
+      // Typical / Conservative caps
+      $('btnTypicalCaps').addEventListener('click', ()=>{
+        NOVASTAR_SENDERS = NOVASTAR_SENDERS.map(s=>{
+          const m = s.model.replace(/\s+/g,'').toLowerCase();
+          if (m.startsWith('vx4') || m.startsWith('mctrl660')){
+            return { ...s, perPortPxLimit: 650000, totalPxLimit: 2300000, maxW: 3840, maxH: 1920 };
+          }
+          if (m.startsWith('mctrl4k')){
+            return { ...s, perPortPxLimit: 650000, totalPxLimit: 8800000, maxW: 7680, maxH: 7680 };
+          }
+          return s;
+        });
+        save(); refreshTables(); renderAll();
+      });
+      $('btnConservativeCaps').addEventListener('click', ()=>{
+        NOVASTAR_SENDERS = NOVASTAR_SENDERS.map(s=>{
+          const m = s.model.replace(/\s+/g,'').toLowerCase();
+          if (m.startsWith('vx4') || m.startsWith('mctrl660')){
+            return { ...s, perPortPxLimit: 575000, totalPxLimit: 2000000 };
+          }
+          return s;
+        });
+        save(); refreshTables(); renderAll();
+      });
+
+      // Reset / Import / Export
+      $('resetSenders').addEventListener('click', ()=>{ if(confirm('Reset senders to defaults?')){ NOVASTAR_SENDERS=DEFAULT_SENDERS.slice(); save(); refreshTables(); renderAll(); }});
+      $('resetTiles').addEventListener('click',   ()=>{ if(confirm('Reset tiles to defaults?')){ LED_TILES=DEFAULT_TILES.slice(); save(); refreshTables(); populateTiles(); renderAll(); }});
+      $('exportSenders').addEventListener('click', ()=> downloadJSON(NOVASTAR_SENDERS,'senders.json'));
+      $('exportTiles').addEventListener('click',   ()=> downloadJSON(LED_TILES,'tiles.json'));
+      $('importSenders').addEventListener('change', e=> importJSON(e, data=>{ NOVASTAR_SENDERS=data; save(); refreshTables(); renderAll(); }));
+      $('importTiles').addEventListener('change',   e=> importJSON(e, data=>{ LED_TILES=data; save(); refreshTables(); populateTiles(); renderAll(); }));
+
+      // Share & PDF
+      $('btn-share').addEventListener('click', ()=>{ navigator.clipboard.writeText(location.href).then(()=>alert('Link copied')); });
+      $('btn-pdf').addEventListener('click', async ()=>{
+        try{
+          const jsPDFCtor = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+          const canvas = await html2canvas($('report'), { scale: 2, background:'#FFFFFF' });
+          const img = canvas.toDataURL('image/jpeg', 0.95);
+          const doc = new jsPDFCtor({ orientation:'portrait', unit:'mm', format:'a4' });
+          const w = doc.internal.pageSize.getWidth(); const m = 8; const uw = w - m*2; const ih = (canvas.height/canvas.width)*uw;
+          doc.setFontSize(16); doc.text('LED Screen — Summary', m, 12);
+          doc.setFontSize(10); doc.addImage(img, 'JPEG', m, 16, uw, ih);
+          doc.save('LED_Screen_Spec.pdf');
+        }catch(e){ console.error(e); alert('PDF export failed. Try browser Print → Save as PDF.'); }
+      });
+
+      renderAll();
+    }
+
+    function downloadJSON(obj, name){
+      const blob=new Blob([JSON.stringify(obj,null,2)],{type:'application/json'});
+      const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name; a.click();
+    }
+    function importJSON(e, cb){
+      const f=e.target.files[0]; if(!f) return;
+      f.text().then(t=>{ try{ cb(JSON.parse(t)); }catch{ alert('Invalid JSON'); } });
+    }
+
+    wire();
+  });
   </script>
 </body>
 </html>
